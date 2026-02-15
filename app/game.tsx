@@ -1,21 +1,23 @@
-import React, { useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
-  Text,
   StyleSheet,
-  ImageBackground,
-  TouchableOpacity,
   Image,
+  useWindowDimensions,
+  ImageBackground,
+  Animated,
+  Easing,
+  Dimensions,
 } from "react-native";
+import { useSelector } from "react-redux";
 
-import { useDispatch, useSelector } from "react-redux";
+import DiceRoll from "../src/components/DiceRoll";
+import GameSkeleton from "../src/components/GameSkeleton";
+import LudoBoard from "../src/components/LudoBoard";
 
-import {
-  rollDice,
-  nextTurn,
-  moveToken,
-  setWinner,
-} from "../src/redux/gameSlice";
+import LottieView from "lottie-react-native";
+import FireworkAnim from "../src/assets/animation/firework.json";
+import TrophyAnim from "../src/assets/animation/trophy.json";
 
 import {
   selectDiceValue,
@@ -24,228 +26,458 @@ import {
   selectWinner,
 } from "../src/redux/selectors";
 
-import { BackgroundImage } from "../src/helpers/GetIcons";
-import { startingPoints } from "../src/helpers/PlotData";
+import { useGameLogic } from "../src/hooks/useGameLogic";
 
-const GameBG = require("../src/assets/images/ludo-bg2.png");
+const GameBG = require("../src/assets/images/ludogmbg.png");
+
+const RedToken = require("../src/assets/images/piles/red_1024.png");
+const GreenToken = require("../src/assets/images/piles/green_1024.png");
+const YellowToken = require("../src/assets/images/piles/yellow_1024.png");
+const BlueToken = require("../src/assets/images/piles/blue_1024.png");
+
+const { width } = Dimensions.get("window");
+
+const BOX_W = width * 0.34;
+const BOX_H = width * 0.18;
 
 export default function GameScreen() {
-  const dispatch = useDispatch();
+  const { width, height } = useWindowDimensions();
 
   const diceValue = useSelector(selectDiceValue);
   const currentPlayer = useSelector(selectCurrentPlayer);
   const players = useSelector(selectPlayers);
   const winner = useSelector(selectWinner);
 
-  const roll = useCallback(() => {
-    if (winner) return;
+  const boardSize = Math.min(width * 0.95, height * 0.55);
 
-    const random = Math.floor(Math.random() * 6) + 1;
-    dispatch(rollDice(random));
-  }, [winner]);
+  const [showFirework, setShowFirework] = useState(false);
+  const [showTrophy, setShowTrophy] = useState(false);
 
-  const handleMove = useCallback(() => {
-    if (winner) return;
+  const triggerFirework = () => {
+    setShowFirework(true);
 
-    const player = players[Number(currentPlayer)];
+    setTimeout(() => {
+      setShowFirework(false);
+    }, 2500);
+  };
 
-    // move first token only (simple demo)
-    let tokenPos = player.tokens[0];
+  const triggerTrophy = () => {
+    setShowTrophy(true);
+  };
 
-    // if token is at home
-    if (tokenPos === 0) {
-      if (diceValue === 6) {
-        tokenPos = startingPoints[currentPlayer];
-        dispatch(moveToken({ playerIndex: currentPlayer, tokenIndex: 0, newPosition: tokenPos }));
-      } else {
-        dispatch(nextTurn());
-      }
-      return;
-    }
+  const {
+    roll,
+    onTokenPress,
+    canRollDice,
+    movableTokens,
+    lastDiceValue,
+    cuttingTokenKey,
+  } = useGameLogic({
+    diceValue,
+    currentPlayer,
+    players,
+    winner,
+    triggerFirework,
+    triggerTrophy,
+  });
 
-    // normal move
-    tokenPos = tokenPos + diceValue;
+  const [loading, setLoading] = useState(true);
 
-    dispatch(moveToken({ playerIndex: currentPlayer, tokenIndex: 0, newPosition: tokenPos }));
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1800);
 
-    // winner check
-    if (tokenPos >= 60) {
-      dispatch(setWinner(player.name));
-      return;
-    }
+    return () => clearTimeout(timer);
+  }, []);
 
-    if (diceValue !== 6) {
-      dispatch(nextTurn());
-    }
-  }, [diceValue, currentPlayer, players, winner]);
+  const shimmerAnim = useRef(new Animated.Value(-100)).current;
+
+  useEffect(() => {
+    shimmerAnim.setValue(-100);
+
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 180,
+        duration: 3200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  const glowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  const activeGlowStyle = {
+    borderColor: glowAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: ["rgba(0,255,255,0.4)", "rgba(0,255,255,1)"],
+    }),
+    shadowOpacity: glowAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.3, 1],
+    }),
+    shadowRadius: glowAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [8, 22],
+    }),
+  };
+
+  if (loading) return <GameSkeleton />;
 
   return (
     <ImageBackground source={GameBG} style={styles.container} resizeMode="cover">
-      <Text style={styles.heading}>LUDO OFFLINE</Text>
+      {/* TOP PLAYERS */}
+      <View style={styles.topRow}>
+        {/* RED */}
+        <View style={styles.playerOuter}>
+          <Animated.View
+            style={[
+              styles.playerBoxSmall,
+              currentPlayer === 0 && styles.activeBox,
+              currentPlayer === 0 && activeGlowStyle,
+            ]}
+          >
+            {currentPlayer === 0 && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.shimmerLine,
+                  {
+                    transform: [
+                      { translateX: shimmerAnim },
+                      { rotate: "25deg" },
+                    ],
+                  },
+                ]}
+              />
+            )}
 
-      {/* Winner */}
-      {winner && (
-        <View style={styles.winnerBox}>
-          <Text style={styles.winnerText}>🏆 Winner: {winner}</Text>
+            <View style={styles.boxRow}>
+              <Image source={RedToken} style={styles.bigToken} />
+
+              <View style={styles.diceSlotBorder}>
+                <View style={styles.diceSlot}>
+                  {currentPlayer === 0 ? (
+                    <DiceRoll
+                      displayDice={diceValue > 0 ? diceValue : lastDiceValue}
+                      onFinish={roll}
+                      disabled={!canRollDice}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+
+        {/* GREEN */}
+        <View style={styles.playerOuter}>
+          <Animated.View
+            style={[
+              styles.playerBoxSmall,
+              currentPlayer === 1 && styles.activeBox,
+              currentPlayer === 1 && activeGlowStyle,
+            ]}
+          >
+            {currentPlayer === 1 && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.shimmerLine,
+                  {
+                    transform: [
+                      { translateX: shimmerAnim },
+                      { rotate: "25deg" },
+                    ],
+                  },
+                ]}
+              />
+            )}
+
+            <View style={styles.boxRow}>
+              <Image source={GreenToken} style={styles.bigToken} />
+
+              <View style={styles.diceSlotBorder}>
+                <View style={styles.diceSlot}>
+                  {currentPlayer === 1 ? (
+                    <DiceRoll
+                      displayDice={diceValue > 0 ? diceValue : lastDiceValue}
+                      onFinish={roll}
+                      disabled={!canRollDice}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+      </View>
+
+      {/* BOARD */}
+      <View style={styles.boardContainer}>
+        <LudoBoard
+          boardSize={boardSize}
+          players={players}
+          onTokenPress={onTokenPress}
+          diceValue={diceValue}
+          currentPlayer={currentPlayer}
+          movableTokens={movableTokens}
+          cuttingTokenKey={cuttingTokenKey}
+        />
+      </View>
+
+      {/* BOTTOM PLAYERS */}
+      <View style={styles.bottomRow}>
+        {/* BLUE */}
+        <View style={styles.playerOuter}>
+          <Animated.View
+            style={[
+              styles.playerBoxSmall,
+              currentPlayer === 3 && styles.activeBox,
+              currentPlayer === 3 && activeGlowStyle,
+            ]}
+          >
+            {currentPlayer === 3 && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.shimmerLine,
+                  {
+                    transform: [
+                      { translateX: shimmerAnim },
+                      { rotate: "25deg" },
+                    ],
+                  },
+                ]}
+              />
+            )}
+
+            <View style={styles.boxRow}>
+              <Image source={BlueToken} style={styles.bigToken} />
+
+              <View style={styles.diceSlotBorder}>
+                <View style={styles.diceSlot}>
+                  {currentPlayer === 3 ? (
+                    <DiceRoll
+                      displayDice={diceValue > 0 ? diceValue : lastDiceValue}
+                      onFinish={roll}
+                      disabled={!canRollDice}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+
+        {/* YELLOW */}
+        <View style={styles.playerOuter}>
+          <Animated.View
+            style={[
+              styles.playerBoxSmall,
+              currentPlayer === 2 && styles.activeBox,
+              currentPlayer === 2 && activeGlowStyle,
+            ]}
+          >
+            {currentPlayer === 2 && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.shimmerLine,
+                  {
+                    transform: [
+                      { translateX: shimmerAnim },
+                      { rotate: "25deg" },
+                    ],
+                  },
+                ]}
+              />
+            )}
+
+            <View style={styles.boxRow}>
+              <Image source={YellowToken} style={styles.bigToken} />
+
+              <View style={styles.diceSlotBorder}>
+                <View style={styles.diceSlot}>
+                  {currentPlayer === 2 ? (
+                    <DiceRoll
+                      displayDice={diceValue > 0 ? diceValue : lastDiceValue}
+                      onFinish={roll}
+                      disabled={!canRollDice}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+      </View>
+
+      {/* 🎆 FIREWORK ANIMATION */}
+      {showFirework && (
+        <View style={styles.fireworkOverlay} pointerEvents="none">
+          <LottieView
+            source={FireworkAnim}
+            autoPlay
+            loop={false}
+            style={{ width: "100%", height: "100%" }}
+          />
         </View>
       )}
 
-      {/* Dice */}
-      <View style={styles.diceBox}>
-        <Image source={BackgroundImage.GetImage(diceValue)} style={styles.diceImg} />
-      </View>
-
-      {/* Current Player */}
-      <View style={styles.turnBox}>
-        <Text style={styles.turnText}>
-          Turn: {players[currentPlayer].name}
-        </Text>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.btnRow}>
-        <TouchableOpacity style={styles.btn} onPress={roll}>
-          <Text style={styles.btnText}>ROLL</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.btn2} onPress={handleMove}>
-          <Text style={styles.btnText}>MOVE</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tokens */}
-      <View style={styles.tokensBox}>
-       {players.map((p: any, index: number) => (
-          <View key={index} style={styles.playerRow}>
-            <Text style={[styles.playerName, { color: p.color }]}>
-              {p.name}:
-            </Text>
-            <Text style={styles.posText}>{p.tokens.join(" , ")}</Text>
-          </View>
-        ))}
-      </View>
+      {/* 🏆 TROPHY WINNER ANIMATION */}
+      {showTrophy && (
+        <View style={styles.trophyOverlay} pointerEvents="none">
+          <LottieView
+            source={TrophyAnim}
+            autoPlay
+            loop={true}
+            style={{ width: "100%", height: "100%" }}
+          />
+        </View>
+      )}
     </ImageBackground>
   );
 }
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 60,
     alignItems: "center",
-  },
-
-  heading: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "white",
-    letterSpacing: 2,
-    marginBottom: 20,
-  },
-
-  diceBox: {
-    width: 90,
-    height: 90,
-    borderRadius: 22,
-    backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    marginBottom: 15,
+    paddingTop: 0,
   },
 
-  diceImg: {
-    width: 65,
-    height: 65,
-    resizeMode: "contain",
-  },
-
-  turnBox: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    marginBottom: 20,
-  },
-
-  turnText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-
-  btnRow: {
+  topRow: {
+    width: "94%",
     flexDirection: "row",
-    gap: 14,
-    marginBottom: 20,
-  },
-
-  btn: {
-    paddingVertical: 12,
-    paddingHorizontal: 26,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-  },
-
-  btn2: {
-    paddingVertical: 12,
-    paddingHorizontal: 26,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,255,255,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(0,255,255,0.35)",
-  },
-
-  btnText: {
-    color: "white",
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
-
-  tokensBox: {
-    width: "90%",
-    borderRadius: 22,
-    padding: 18,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-
-  playerRow: {
-    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 10,
   },
 
-  playerName: {
-    width: 80,
-    fontWeight: "900",
+  bottomRow: {
+    width: "94%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
   },
 
-  posText: {
-    color: "white",
-    fontWeight: "700",
+  boardContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 10,
   },
 
-  winnerBox: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,255,255,0.20)",
+  playerOuter: {
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+
+  playerBoxSmall: {
+    width: BOX_W,
+    height: BOX_H,
+    borderRadius: 18,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: "rgba(0,0,0,0.35)",
     borderWidth: 1,
-    borderColor: "rgba(0,255,255,0.40)",
-    marginBottom: 15,
+    borderColor: "rgba(255,255,255,0.12)",
+    justifyContent: "center",
   },
 
-  winnerText: {
-    color: "white",
-    fontSize: 15,
-    fontWeight: "900",
-    letterSpacing: 1,
+  activeBox: {
+    backgroundColor: "rgba(0,255,255,0.06)",
+    borderColor: "rgba(0,255,255,0.75)",
+    shadowColor: "#00ffff",
+    shadowOpacity: 0.75,
+    shadowRadius: 18,
+    elevation: 25,
+  },
+
+  boxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 10,
+  },
+
+  bigToken: {
+    width: BOX_H * 0.75,
+    height: BOX_H * 0.75,
+    resizeMode: "contain",
+  },
+
+  diceSlotBorder: {
+    width: BOX_H * 0.62,
+    height: BOX_H * 0.62,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "rgba(0,255,255,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+
+  diceSlot: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+    backgroundColor: "transparent",
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  shimmerLine: {
+    position: "absolute",
+    top: -BOX_H * 0.25,
+    left: -BOX_W * 0.35,
+    width: BOX_W * 0.18,
+    height: BOX_H * 1.6,
+    borderRadius: 60,
+    zIndex: 10,
+    backgroundColor: "rgba(14, 161, 169, 0.18)",
+    shadowColor: "#00ffff",
+    shadowOpacity: 0.55,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+
+  fireworkOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999999,
+    elevation: 999999,
+  },
+
+  trophyOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999999,
+    elevation: 9999999,
   },
 });
