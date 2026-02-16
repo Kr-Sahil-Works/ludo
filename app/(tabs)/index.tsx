@@ -24,15 +24,18 @@ import GameHeader from "@/src/components/GameHeader";
 
 import { setHomeLoading } from "../../src/redux/uiSlice";
 import SpinWheelModal from "@/src/components/SpinWheelModal";
+import PassPlaySelectModal from "@/src/components/PassNPlayModal";
+
 
 import ModeCard from "@/src/components/ModeCard";
+
+import { useUser } from "@clerk/clerk-expo";
 
 const Logo: any = require("../../src/assets/images/brightlogo.png");
 const HomeBG: any = require("../../src/assets/images/hf2.png");
 const Witch: any = require("../../src/assets/animation/witch.json");
 
 const SpinBtn = require("@/src/assets/images/spin.png");
-
 
 // PNG icons
 const Earth = require("@/src/assets/icons/earth.png");
@@ -41,13 +44,17 @@ const Vs = require("@/src/assets/icons/vs.png");
 const Pass = require("@/src/assets/icons/pass.png");
 const Snake = require("@/src/assets/icons/snake.png");
 
-
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [showSpin, setShowSpin] = useState(false);
+  const [showPassPlaySelect, setShowPassPlaySelect] = useState(false);
+
+
 
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
+
+  const { isSignedIn } = useUser(); // ✅ LOGIN CHECK
 
   useEffect(() => {
     dispatch(setHomeLoading(true));
@@ -78,28 +85,27 @@ export default function HomeScreen() {
 
   const spinBounce = useRef(new Animated.Value(1)).current;
 
-useEffect(() => {
-  const anim = Animated.loop(
-    Animated.sequence([
-      Animated.timing(spinBounce, {
-        toValue: 1.08,
-        duration: 1200,
-        easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(spinBounce, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ])
-  );
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(spinBounce, {
+          toValue: 1.08,
+          duration: 1200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(spinBounce, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
 
-  anim.start();
-  return () => anim.stop();
-}, []);
-
+    anim.start();
+    return () => anim.stop();
+  }, []);
 
   // BACKGROUND ZOOM LOOP
   useEffect(() => {
@@ -226,7 +232,7 @@ useEffect(() => {
     }
 
     playFX("game_start");
-    router.push("/game");
+    router.push("../gamepages/classicPNPgame");
   };
 
   const handleNewGamePress = useCallback(() => {
@@ -237,12 +243,22 @@ useEffect(() => {
     startGame(false);
   }, []);
 
+  // 🔒 Login required only for Online + Snake Ladder
+  const openLockedMode = () => {
+    if (!isSignedIn) {
+      playFX("ui");
+      router.push("../login");
+      return;
+    }
+
+    setShowComingSoon(true);
+  };
+
   return loading ? (
     <HomeLoader />
   ) : (
     <View style={{ flex: 1 }}>
       <GameHeader
-        name="CodeWavey"
         coins={1970}
         gems={150}
         level={1}
@@ -252,7 +268,6 @@ useEffect(() => {
         onPressStore={() => console.log("Store")}
         onPressSettings={() => console.log("Settings")}
       />
-
 
       {/* WHOLE SCREEN */}
       <View style={{ flex: 1 }}>
@@ -282,24 +297,26 @@ useEffect(() => {
         {/* UI DOES NOT SCALE */}
         <View style={{ flex: 1 }}>
           {/* SPIN BUTTON LEFT */}
-<Pressable
-  style={styles.spinBtn}
-  onPress={() => {
-    playFX("ui");
-    setShowSpin(true);
-  }}
->
- <Animated.Image
-  source={SpinBtn}
-  style={[
-    styles.spinImg,
-    {
-      transform: [{ scale: spinBounce }],
-    },
-  ]}
-/>
+{isSignedIn && (
+  <Pressable
+    style={styles.spinBtn}
+    onPress={() => {
+      playFX("ui");
+      setShowSpin(true);
+    }}
+  >
+    <Animated.Image
+      source={SpinBtn}
+      style={[
+        styles.spinImg,
+        {
+          transform: [{ scale: spinBounce }],
+        },
+      ]}
+    />
+  </Pressable>
+)}
 
-</Pressable>
 
           {/* LOGO */}
           <View style={styles.imgContainer}>
@@ -353,14 +370,20 @@ useEffect(() => {
               />
             )}
 
+            {/* ✅ WORKS WITHOUT LOGIN */}
             <ModeCard
-              title="Pass N Play"
-              subtitle="Local match"
-              icon={Pass}
-              color="#ff3b30"
-              onPress={handleNewGamePress}
-            />
+  title="Pass N Play"
+  subtitle="Local match"
+  icon={Pass}
+  color="#ff3b30"
+  onPress={() => {
+    playFX("ui");
+    setShowPassPlaySelect(true);
+  }}
+/>
 
+
+            {/* ✅ WORKS WITHOUT LOGIN */}
             <ModeCard
               title="Computer"
               subtitle="Coming soon"
@@ -369,21 +392,23 @@ useEffect(() => {
               onPress={() => setShowComingSoon(true)}
             />
 
+            {/* 🔒 LOGIN REQUIRED */}
             <ModeCard
               title="Online"
               subtitle="Coming soon"
               icon={Friends}
               color="#89dd0a"
-              onPress={() => setShowComingSoon(true)}
+              onPress={openLockedMode}
             />
-              <ModeCard
-                title="Snake Ladder"
-                subtitle="Coming soon"
-                icon={Snake}
-                color="#ff7b00"
-                onPress={() => setShowComingSoon(true)}
-              />
-           
+
+            {/* 🔒 LOGIN REQUIRED */}
+            <ModeCard
+              title="Snake Ladder"
+              subtitle="Coming soon"
+              icon={Snake}
+              color="#ff7b00"
+              onPress={openLockedMode}
+            />
           </View>
 
           {/* WITCH */}
@@ -415,15 +440,29 @@ useEffect(() => {
             visible={showComingSoon}
             onClose={() => setShowComingSoon(false)}
           />
-         <SpinWheelModal
-  visible={showSpin}
-  onClose={() => setShowSpin(false)}
- onReward={(coins) => {
-  console.log("SPIN REWARD:", coins);
-  setShowSpin(false);
-  // TODO: add coins to redux or state here
-}}
 
+         {isSignedIn && (
+  <SpinWheelModal
+    visible={showSpin}
+    onClose={() => setShowSpin(false)}
+    onReward={(coins) => {
+      console.log("SPIN REWARD:", coins);
+      setShowSpin(false);
+    }}
+  />
+)}
+<PassPlaySelectModal
+  visible={showPassPlaySelect}
+  coins={2825} // later connect redux/convex coins
+  onClose={() => setShowPassPlaySelect(false)}
+  onClassic={() => {
+    setShowPassPlaySelect(false);
+    handleNewGamePress(); // goes to /game
+  }}
+  on2v2={() => {
+    setShowPassPlaySelect(false);
+    setShowComingSoon(true); // for now
+  }}
 />
 
 
@@ -469,8 +508,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
-    rowGap: 14,
+    justifyContent: "center",
+    rowGap: 8,
+    columnGap: 10,
   },
 
   witchContainer: {
@@ -487,23 +527,22 @@ const styles = StyleSheet.create({
     width: 210,
     transform: [{ rotate: "25deg" }],
   },
+
   spinBtn: {
-  position: "absolute",
-  left: 12,
-  top: 110,
-  width: 90,
-  height: 90,
-  zIndex: 9999,
-  elevation: 9999,
-  justifyContent: "center",
-  alignItems: "center",
-},
+    position: "absolute",
+    left: 12,
+    top: 110,
+    width: 90,
+    height: 90,
+    zIndex: 9999,
+    elevation: 9999,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
-
-spinImg: {
-  width: "100%",
-  height: "100%",
-  resizeMode: "contain",
-},
-
+  spinImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
+  },
 });

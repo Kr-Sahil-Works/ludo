@@ -34,8 +34,11 @@ export default function ModeCard({
   // dots animation
   const dotAnim = useRef(new Animated.Value(0)).current;
 
-  const CARD_W = width * 0.42;
-  const CARD_H = CARD_W * 0.86;
+  const CARD_W =
+  width >= 500 ? width * 0.34 : width >= 400 ? width * 0.40 : width * 0.42;
+
+const CARD_H = CARD_W * 0.82;
+
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -101,13 +104,18 @@ useEffect(() => {
 
 
   return (
-    <Pressable
-      onPress={() => {
-        Vibration.vibrate(18);
-        onPress();
-      }}
-      style={{ width: CARD_W }}
-    >
+   <Pressable
+  onPress={() => {
+    Vibration.vibrate(18);
+    onPress();
+  }}
+  style={{
+    width: CARD_W,
+    zIndex: 9999,
+    elevation: 9999,
+  }}
+>
+
       <View style={[styles.card, { height: CARD_H }]}>
         {/* Glow Border */}
         <Animated.View
@@ -190,12 +198,15 @@ useEffect(() => {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    elevation: 25,
-  },
+  borderRadius: 22,
+  overflow: "hidden",
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.10)",
+  elevation: 25,
+  zIndex: 9999,
+  marginHorizontal: 2,
+},
+
 
   glowBorder: {
     ...StyleSheet.absoluteFillObject,

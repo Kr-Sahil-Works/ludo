@@ -7,18 +7,34 @@ import {
   Dimensions,
   Image,
   Animated,
-  SafeAreaView,
+  Vibration,
 } from "react-native";
+
 import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+
+import { useUser } from "@clerk/clerk-expo";
+
+import { useSelector } from "react-redux";
+import { RootState } from "@/src/redux/store";
 
 const { width } = Dimensions.get("window");
 
-// ✅ More compact header height
 const HEADER_HEIGHT = width < 380 ? width * 0.145 : width * 0.16;
-
-// ✅ Small device flag
 const isSmallDevice = width < 380;
+
+type Props = {
+  coins?: number;
+  gems?: number;
+  level?: number;
+  onPressProfile?: () => void;
+  onPressCoins?: () => void;
+  onPressGems?: () => void;
+  onPressStore?: () => void;
+  onPressSettings?: () => void;
+};
+
 
 const formatNumber = (num: number) => {
   if (num >= 1_000_000_000)
@@ -30,25 +46,60 @@ const formatNumber = (num: number) => {
 };
 
 export default function GameHeader({
-  coins = 3000,
-  gems = 999,
-  level = 45,
-  onPressProfile,
   onPressCoins,
   onPressGems,
   onPressStore,
   onPressSettings,
-}: any) {
+}: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const { isSignedIn } = useUser();
+
+  const handleCoinsPress = () => {
+  if (!isSignedIn) {
+    router.push("/login");
+    return;
+  }
+  router.push("/inventory");
+};
+
+const handleGemsPress = () => {
+  if (!isSignedIn) {
+    router.push("/login");
+    return;
+  }
+  router.push("/inventory");
+};
+
+const handleStorePress = () => {
+  router.push("/inventory");
+};
+
+const handleSettingsPress = () => {
+  router.push("/settings");
+};
+
+
+  // ✅ Redux user data (synced from Convex)
+  const { username, coins, gems, level, imageUrl, isLoaded } = useSelector(
+    (state: RootState) => state.user
+  );
+
+  const displayName = username || "Player";
+  const displayCoins = coins || 0;
+  const displayGems = gems || 0;
+  const displayLevel = level || 1;
 
   return (
     <SafeAreaView
       style={[
         styles.wrapper,
         {
-          paddingTop: insets.top + 6, // ✅ FIX STATUS BAR CUT
+          paddingTop: insets.top - 20,
         },
       ]}
+      edges={["top"]}
     >
       <LinearGradient
         colors={[
@@ -63,7 +114,16 @@ export default function GameHeader({
         <View style={styles.glowBorder} />
 
         {/* PROFILE */}
-        <Pressable style={styles.profileBox} onPress={onPressProfile}>
+        <Pressable
+          style={styles.profileBox}
+          onPress={() => {
+            if (isSignedIn) {
+              router.push("/profile");
+            } else {
+              router.push("/login");
+            }
+          }}
+        >
           <View style={styles.avatarOuter}>
             <LinearGradient
               colors={["#ffe168", "#ff9f00", "#ffe168"]}
@@ -73,7 +133,12 @@ export default function GameHeader({
                 colors={["#3b5bff", "#1cc8ff"]}
                 style={styles.avatarInner}
               >
-                <Text style={styles.avatarText}>👤</Text>
+                {/* ✅ SHOW CLERK/CONVEX IMAGE ONLY IF LOGGED IN */}
+                {isSignedIn && isLoaded && imageUrl ? (
+                  <Image source={{ uri: imageUrl }} style={styles.avatarImg} />
+                ) : (
+                  <Text style={styles.avatarText}>👤</Text>
+                )}
               </LinearGradient>
             </LinearGradient>
 
@@ -82,10 +147,11 @@ export default function GameHeader({
               colors={["#ffe168", "#ffb300"]}
               style={styles.levelBadge}
             >
-              <Text style={styles.levelText}>{level}</Text>
+              <Text style={styles.levelText}>
+                {isSignedIn && isLoaded ? displayLevel : 1}
+              </Text>
             </LinearGradient>
 
-            {/* ONLINE DOT */}
             <View style={styles.onlineDot} />
           </View>
         </Pressable>
@@ -94,23 +160,24 @@ export default function GameHeader({
         <View style={styles.walletBox}>
           {isSmallDevice ? (
             <DoubleWalletPill
-              coins={formatNumber(coins)}
-              gems={formatNumber(gems)}
-              onPressCoins={onPressCoins}
-              onPressGems={onPressGems}
+              coins={formatNumber(isSignedIn && isLoaded ? displayCoins : 0)}
+              gems={formatNumber(isSignedIn && isLoaded ? displayGems : 0)}
+              onPressCoins={handleCoinsPress}
+              onPressGems={handleGemsPress}
+
             />
           ) : (
             <>
               <GlassPill
                 icon={require("../assets/images/header/money.png")}
-                value={formatNumber(coins)}
-                onPressPlus={onPressCoins}
+                value={formatNumber(isSignedIn && isLoaded ? displayCoins : 0)}
+                onPressPlus={handleCoinsPress}
               />
 
               <GlassPill
                 icon={require("../assets/images/header/gem.png")}
-                value={formatNumber(gems)}
-                onPressPlus={onPressGems}
+                value={formatNumber(isSignedIn && isLoaded ? displayGems : 0)}
+               onPressPlus={handleGemsPress}
               />
             </>
           )}
@@ -118,7 +185,7 @@ export default function GameHeader({
 
         {/* RIGHT ICONS */}
         <View style={styles.rightBox}>
-          <Pressable style={styles.iconBtn} onPress={onPressStore}>
+          <Pressable style={styles.iconBtn} onPress={handleStorePress}>
             <Image
               source={require("../assets/images/header/carts.png")}
               style={styles.iconImg}
@@ -126,7 +193,7 @@ export default function GameHeader({
             />
           </Pressable>
 
-          <Pressable style={styles.iconBtn} onPress={onPressSettings}>
+          <Pressable style={styles.iconBtn} onPress={handleSettingsPress}>
             <Image
               source={require("../assets/images/header/settings.png")}
               style={styles.iconImg}
@@ -198,67 +265,18 @@ function GlassPill({ icon, value, onPressPlus }: any) {
     <View style={styles.pill}>
       <View style={styles.pillBorder} />
 
-      {/* ICON WITH TWINKLE */}
       <View style={styles.iconWrapper}>
         <Image source={icon} style={styles.pillIcon} resizeMode="contain" />
 
-        <Animated.Text
-          style={[
-            styles.star,
-            styles.star1,
-            {
-              opacity: star1,
-              transform: [
-                {
-                  scale: star1.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.7, 1.2],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
+        <Animated.Text style={[styles.star, styles.star1, { opacity: star1 }]}>
           ✨
         </Animated.Text>
 
-        <Animated.Text
-          style={[
-            styles.star,
-            styles.star2,
-            {
-              opacity: star2,
-              transform: [
-                {
-                  scale: star2.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.7, 1.3],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
+        <Animated.Text style={[styles.star, styles.star2, { opacity: star2 }]}>
           ✦
         </Animated.Text>
 
-        <Animated.Text
-          style={[
-            styles.star,
-            styles.star3,
-            {
-              opacity: star3,
-              transform: [
-                {
-                  scale: star3.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.7, 1.4],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
+        <Animated.Text style={[styles.star, styles.star3, { opacity: star3 }]}>
           ✨
         </Animated.Text>
       </View>
@@ -267,7 +285,13 @@ function GlassPill({ icon, value, onPressPlus }: any) {
         {value}
       </Text>
 
-      <Pressable style={styles.plusBtn} onPress={onPressPlus}>
+      <Pressable
+        style={styles.plusBtn}
+        onPress={() => {
+          Vibration.vibrate(10);
+          onPressPlus?.();
+        }}
+      >
         <LinearGradient
           colors={["#ffe168", "#ffb300", "#ff8800"]}
           style={styles.plusGradient}
@@ -279,7 +303,7 @@ function GlassPill({ icon, value, onPressPlus }: any) {
   );
 }
 
-/* ---------------- DOUBLE WALLET PILL (SMALL DEVICES) ---------------- */
+/* ---------------- DOUBLE WALLET ---------------- */
 function DoubleWalletPill({ coins, gems, onPressCoins, onPressGems }: any) {
   return (
     <View style={styles.doublePill}>
@@ -377,10 +401,19 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
   },
 
   avatarText: {
     fontSize: width * 0.035,
+    color: "white",
+    fontWeight: "900",
+  },
+
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
   },
 
   levelBadge: {
@@ -462,7 +495,7 @@ const styles = StyleSheet.create({
   pillValue: {
     flex: 1,
     minWidth: width * 0.07,
-    fontSize: width * 0.030,
+    fontSize: width * 0.03,
     fontWeight: "900",
     color: "white",
     textAlign: "center",
@@ -473,23 +506,9 @@ const styles = StyleSheet.create({
     color: "white",
   },
 
-  star1: {
-    top: -6,
-    right: -6,
-    fontSize: width * 0.03,
-  },
-
-  star2: {
-    bottom: -3,
-    left: -1,
-    fontSize: width * 0.028,
-  },
-
-  star3: {
-    top: 10,
-    left: -5,
-    fontSize: width * 0.022,
-  },
+  star1: { top: -6, right: -6, fontSize: width * 0.03 },
+  star2: { bottom: -3, left: -1, fontSize: width * 0.028 },
+  star3: { top: 10, left: -5, fontSize: width * 0.022 },
 
   plusBtn: {
     width: width * 0.055,
@@ -516,7 +535,7 @@ const styles = StyleSheet.create({
   },
 
   rightBox: {
-    width: width < 380 ? width * 0.20 : width * 0.22,
+    width: width < 380 ? width * 0.2 : width * 0.22,
     flexDirection: "row",
     justifyContent: "flex-end",
     alignItems: "center",
@@ -539,7 +558,6 @@ const styles = StyleSheet.create({
     height: "65%",
   },
 
-  /* DOUBLE PILL */
   doublePill: {
     flexDirection: "row",
     alignItems: "center",

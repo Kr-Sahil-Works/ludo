@@ -1,13 +1,12 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { persistReducer, persistStore } from "redux-persist";
-
 import storage from "./storage";
 import rootReducer from "./rootReducer";
 
 const persistConfig = {
   key: "root",
   storage,
-  whitelist: ["ui"], // keep ui state persistent
+  whitelist: ["ui", "user"], // ✅ persist UI + USER
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -16,7 +15,7 @@ export const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      serializableCheck: false,
+      serializableCheck: false, // ✅ required for redux-persist
     }),
 });
 

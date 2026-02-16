@@ -1,5 +1,5 @@
-import { Tabs } from "expo-router";
 import React, { useRef } from "react";
+import { Tabs, Redirect } from "expo-router";
 import {
   Image,
   StyleSheet,
@@ -7,9 +7,13 @@ import {
   Pressable,
   Animated,
   Vibration,
+  ActivityIndicator,
 } from "react-native";
+
 import { useSelector } from "react-redux";
 import type { RootState } from "@/src/redux/store";
+
+import { useUser } from "@clerk/clerk-expo";
 
 const HomeIcon = require("@/src/assets/icons/home.png");
 const InventoryIcon = require("@/src/assets/icons/inventory.png");
@@ -18,6 +22,7 @@ const SettingsIcon = require("@/src/assets/icons/settings.png");
 
 const TabBarBG = require("@/src/assets/images/tabbar_bg.png");
 
+/* ---------------- TAB BUTTON ---------------- */
 function TabButton(props: any) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -58,8 +63,21 @@ function TabButton(props: any) {
   );
 }
 
+/* ---------------- MAIN TAB LAYOUT ---------------- */
 export default function TabLayout() {
   const homeLoading = useSelector((state: RootState) => state.ui.homeLoading);
+
+  const { isLoaded, isSignedIn } = useUser();
+
+  // ✅ Wait Clerk
+  if (!isLoaded) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="white" />
+      </View>
+    );
+  }
+
 
   return (
     <Tabs
@@ -78,10 +96,7 @@ export default function TabLayout() {
         tabBarBackground: () =>
           homeLoading ? null : (
             <View style={StyleSheet.absoluteFill}>
-              {/* soft dark overlay behind png (makes it clean) */}
               <View style={styles.darkOverlay} />
-
-              {/* PNG glass bar */}
               <Image source={TabBarBG} style={styles.pngBg} />
             </View>
           ),
@@ -143,6 +158,13 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: "#070812",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   tabBar: {
     position: "absolute",
     left: 14,
@@ -184,7 +206,7 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 8,
 
-    minWidth: 80, // ✅ forces equal spacing for all tabs
+    minWidth: 80,
   },
 
   label: {
@@ -201,7 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    marginTop:10,
+    marginTop: 10,
   },
 
   activeIconWrap: {
