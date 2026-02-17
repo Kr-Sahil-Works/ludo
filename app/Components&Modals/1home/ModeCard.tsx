@@ -5,9 +5,9 @@ import {
   StyleSheet,
   Pressable,
   Animated,
-  Image,
   Dimensions,
   Vibration,
+  ImageBackground,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -30,15 +30,12 @@ export default function ModeCard({
   onPress,
 }: Props) {
   const glowAnim = useRef(new Animated.Value(0)).current;
-
-  // dots animation
   const dotAnim = useRef(new Animated.Value(0)).current;
 
   const CARD_W =
-  width >= 500 ? width * 0.34 : width >= 400 ? width * 0.40 : width * 0.42;
+    width >= 500 ? width * 0.34 : width >= 400 ? width * 0.4 : width * 0.42;
 
-const CARD_H = CARD_W * 0.82;
-
+  const CARD_H = CARD_W * 0.82;
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -60,68 +57,81 @@ const CARD_H = CARD_W * 0.82;
     return () => anim.stop();
   }, []);
 
-useEffect(() => {
-  const dotLoop = Animated.loop(
-    Animated.sequence([
-      Animated.timing(dotAnim, { toValue: 0, duration: 0, useNativeDriver: false }),
-      Animated.delay(850),
+  useEffect(() => {
+    const dotLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dotAnim, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+        Animated.delay(850),
 
-      Animated.timing(dotAnim, { toValue: 1, duration: 0, useNativeDriver: false }),
-      Animated.delay(850),
+        Animated.timing(dotAnim, {
+          toValue: 1,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+        Animated.delay(850),
 
-      Animated.timing(dotAnim, { toValue: 2, duration: 0, useNativeDriver: false }),
-      Animated.delay(850),
+        Animated.timing(dotAnim, {
+          toValue: 2,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+        Animated.delay(850),
 
-      Animated.timing(dotAnim, { toValue: 3, duration: 0, useNativeDriver: false }),
-      Animated.delay(850),
-    ])
-  );
+        Animated.timing(dotAnim, {
+          toValue: 3,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+        Animated.delay(850),
+      ])
+    );
 
-  dotLoop.start();
-  return () => dotLoop.stop();
-}, []);
-
-
+    dotLoop.start();
+    return () => dotLoop.stop();
+  }, []);
 
   const getDotColor = (dotIndex: number) => {
-  return dotAnim.interpolate({
-    inputRange: [0, 1, 2, 3],
-    outputRange: [
-      // STATE 0: C W W W
-      dotIndex === 1 ? color : "rgba(255,255,255,0.55)",
-
-      // STATE 1: C C W W
-      dotIndex === 1 || dotIndex === 2 ? color : "rgba(255,255,255,0.55)",
-
-      // STATE 2: C W C W
-      dotIndex === 1 || dotIndex === 3 ? color : "rgba(255,255,255,0.55)",
-
-      // STATE 3: W C W C
-      dotIndex === 2 || dotIndex === 4 ? color : "rgba(255,255,255,0.55)",
-    ],
-  });
-};
-
+    return dotAnim.interpolate({
+      inputRange: [0, 1, 2, 3],
+      outputRange: [
+        dotIndex === 1 ? color : "rgba(255,255,255,0.55)",
+        dotIndex === 1 || dotIndex === 2
+          ? color
+          : "rgba(255,255,255,0.55)",
+        dotIndex === 1 || dotIndex === 3
+          ? color
+          : "rgba(255,255,255,0.55)",
+        dotIndex === 2 || dotIndex === 4
+          ? color
+          : "rgba(255,255,255,0.55)",
+      ],
+    });
+  };
 
   return (
-   <Pressable
-  onPress={() => {
-    Vibration.vibrate(18);
-    onPress();
-  }}
-  style={{
-    width: CARD_W,
-    zIndex: 9999,
-    elevation: 9999,
-  }}
->
-
+    <Pressable
+      onPress={() => {
+        Vibration.vibrate(18);
+        onPress();
+      }}
+      style={{
+        width: CARD_W,
+        zIndex: 9999,
+        elevation: 9999,
+      }}
+    >
       <View style={[styles.card, { height: CARD_H }]}>
-        {/* Glow Border */}
+
+          {/* Glow Border (TOP MOST) */}
         <Animated.View
           style={[
             styles.glowBorder,
             {
+              zIndex: 10,
               borderColor: color,
               opacity: glowAnim.interpolate({
                 inputRange: [0, 1],
@@ -131,33 +141,52 @@ useEffect(() => {
           ]}
         />
 
-        {/* Glass Blur */}
-        <BlurView intensity={32} tint="dark" style={StyleSheet.absoluteFill} />
+        {/* Blur (ABOVE ICON) */}
+        <BlurView
+          intensity={18} // 🔥 reduce blur so icon visible
+          tint="dark"
+          style={[StyleSheet.absoluteFill, { zIndex: 1 }]}
+        />
 
-        {/* Glass Overlay */}
+        {/* Glass Overlay (LIGHT) */}
         <LinearGradient
           colors={[
-            "rgba(255,255,255,0.10)",
-            "rgba(255,255,255,0.03)",
-            "rgba(0,0,0,0.25)",
+            "rgba(255,255,255,0.06)",
+            "rgba(255,255,255,0.02)",
+            "rgba(0,0,0,0.12)", // 🔥 less dark
           ]}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, { zIndex: 2 }]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
 
-        {/* ICON AREA */}
-        <View style={styles.iconArea}>
-          <View style={[styles.iconCircle, { borderColor: color + "aa" }]}>
-            <Image source={icon} style={styles.iconImg} />
-          </View>
-        </View>
+       {/* ICON TOP AREA (60%) */}
+<View style={[styles.iconBgArea, { zIndex: 3 }]}>
+
+  {/* ✅ GLOW FIRST (BEHIND ICON) */}
+  <View
+    style={[
+      styles.iconGlow,
+      { backgroundColor: color + "55", shadowColor: color },
+    ]}
+  />
+
+  {/* ✅ ICON PNG ON TOP */}
+  <ImageBackground
+    source={icon}
+    style={styles.iconBg}
+    imageStyle={styles.iconBgImg}
+    resizeMode="contain"
+  />
+</View>
+
 
         {/* TEXT AREA */}
-        <View style={styles.bottomArea}>
+        <View style={[styles.bottomArea, { zIndex: 5 }]}>
+          <View style={styles.bottomDarkOverlay} />
+
           <Text style={styles.title}>{title}</Text>
 
-          {/* Dots */}
           <View style={styles.dotRow}>
             <Animated.View
               style={[styles.dot, { backgroundColor: getDotColor(1) }]}
@@ -173,22 +202,22 @@ useEffect(() => {
             />
           </View>
 
-          {/* Subtitle */}
           {subtitle ? (
             <Text style={[styles.subtitle, { color: color }]}>
               ● {subtitle}
             </Text>
           ) : null}
 
-          {/* Line */}
           <View style={[styles.line, { backgroundColor: color }]} />
         </View>
+
+      
 
         {/* Bottom Glow */}
         <View
           style={[
             styles.bottomGlow,
-            { backgroundColor: color + "33", shadowColor: color },
+            { backgroundColor: color + "33", shadowColor: color, zIndex: 20 },
           ]}
         />
       </View>
@@ -196,58 +225,79 @@ useEffect(() => {
   );
 }
 
+
 const styles = StyleSheet.create({
   card: {
-  borderRadius: 22,
-  overflow: "hidden",
-  borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.10)",
-  elevation: 25,
-  zIndex: 9999,
-  marginHorizontal: 2,
-},
-
+    borderRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    elevation: 25,
+    zIndex: 9999,
+    marginHorizontal: 2,
+  },
 
   glowBorder: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 22,
     borderWidth: 2,
+    zIndex: 0,
+    elevation: 0,
   },
 
-  iconArea: {
-    flex: 1,
+  // FULL BACKGROUND ICON
+  fullIconBg: {
+    width: "100%",
+    height: "100%",
+    opacity: 0.25,
+  },
+
+  // ✅ ICON TOP AREA (60%)
+  iconBgArea: {
+    flex: 0.6,
+    width: "100%",
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 5,
-    paddingBottom: 0,
   },
 
-  iconCircle: {
-    width: 62,
-    height: 62,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.20)",
-    borderWidth: 1.5,
-  },
+ iconBg: {
+  width: "100%",
+  height: "100%",
+  justifyContent: "center",
+  alignItems: "center",
+},
 
-  iconImg: {
-    width: 50,
-    height: 50,
-    borderRadius:20,
-    resizeMode: "contain",
+iconBgImg: {
+  width: "100%",
+  height: "100%",
+  opacity: 1,
+  transform: [{ scale: 1.2 }], // 🔥 make icon bigger
+},
+
+  iconGlow: {
+    position: "absolute",
+    width: 95,
+    height: 95,
+    borderRadius: 999,
+    opacity: 0.7,
+    shadowOpacity: 1,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 15,
   },
 
   bottomArea: {
-    height: 78,
+    flex: 0.4,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.20)",
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.10)",
     paddingHorizontal: 6,
-    paddingTop: 0,
+  },
+
+  bottomDarkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
 
   title: {

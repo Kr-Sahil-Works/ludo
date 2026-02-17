@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, StyleSheet, Image } from "react-native";
 import Token from "./Token";
 
@@ -7,15 +7,17 @@ import {
   getTokenPositionXY,
   getCellXY,
   HomeTokenSlots,
-} from "../helpers/BoardPositions";
+} from "../../src/helpers/BoardPositions";
 
-const BoardImg = require("../assets/images/boardsquare_2040.png");
+import TileImpactPulse from "@/app/gameLogic/TileImpactPulse";
+
+const BoardImg = require("@/src/assets/images/boardsquare_2040.png");
 const PADDING = 6;
 
-const RedToken = require("../assets/images/piles/red_1024.png");
-const GreenToken = require("../assets/images/piles/green_1024.png");
-const YellowToken = require("../assets/images/piles/yellow_1024.png");
-const BlueToken = require("../assets/images/piles/blue_1024.png");
+const RedToken = require("@/src/assets/images/piles/red_1024.png");
+const GreenToken = require("@/src/assets/images/piles/green_1024.png");
+const YellowToken = require("@/src/assets/images/piles/yellow_1024.png");
+const BlueToken = require("@/src/assets/images/piles/blue_1024.png");
 
 type Player = {
   name: string;
@@ -30,6 +32,7 @@ type Props = {
   currentPlayer: number;
   movableTokens: number[];
   cuttingTokenKey: string | null;
+  activePlayerIndexes: number[];
 };
 
 export default function LudoBoard({
@@ -40,9 +43,30 @@ export default function LudoBoard({
   currentPlayer,
   movableTokens,
   cuttingTokenKey,
+  activePlayerIndexes,
 }: Props) {
   const cellSize = (boardSize - PADDING * 2) / GRID_SIZE;
   const tokenSize = cellSize * 0.7;
+
+  // ✅ TILE IMPACT EFFECT STATE
+  const [impacts, setImpacts] = useState<
+    { id: string; x: number; y: number; color: string }[]
+  >([]);
+
+  // ✅ Trigger Impact Pulse
+  const triggerImpact = (x: number, y: number, color: string = "#00ffff") => {
+    const id = `${Date.now()}-${Math.random()}`;
+
+    setImpacts((prev) => [
+      ...prev,
+      {
+        id,
+        x: x - tokenSize * 0.2,
+        y: y - tokenSize * 0.2,
+        color,
+      },
+    ]);
+  };
 
   const getTokenOffset = (playerIndex: number) => {
     if (playerIndex === 0) return { x: 4, y: -1 }; // red
@@ -73,24 +97,51 @@ export default function LudoBoard({
   };
 
   const getKickDirection = (pIndex: number) => {
-    // You can adjust this based on your board layout
-    if (pIndex === 0) return "left"; // red
-    if (pIndex === 1) return "right"; // green
-    if (pIndex === 2) return "left"; // yellow
-    return "right"; // blue
+    if (pIndex === 0) return "left";
+    if (pIndex === 1) return "right";
+    if (pIndex === 2) return "left";
+    return "right";
+  };
+
+  const getGlowColor = (realPlayerIndex: number) => {
+    return realPlayerIndex === 0
+      ? "rgba(255,45,45,0.9)"
+      : realPlayerIndex === 1
+      ? "rgba(0,255,60,0.9)"
+      : realPlayerIndex === 2
+      ? "rgba(255,213,0,0.9)"
+      : "rgba(0,183,255,0.9)";
   };
 
   return (
     <View style={[styles.boardWrapper, { width: boardSize, height: boardSize }]}>
+      {/* BOARD IMAGE */}
       <Image source={BoardImg} style={styles.boardImage} />
 
-      {players.map((player: Player, pIndex: number) =>
-        player.tokens.map((pos: number, tIndex: number) => {
+      {/* ✅ TILE IMPACT PULSES */}
+      {impacts.map((i) => (
+        <TileImpactPulse
+          key={i.id}
+          x={i.x}
+          y={i.y}
+          size={tokenSize * 1.3}
+          color={i.color}
+          onDone={() => {
+            setImpacts((prev) => prev.filter((p) => p.id !== i.id));
+          }}
+        />
+      ))}
+
+      {/* TOKENS */}
+      {players.map((player: Player, localIndex: number) => {
+        const realPlayerIndex = activePlayerIndexes[localIndex];
+
+        return player.tokens.map((pos: number, tIndex: number) => {
           let cellX = 0;
           let cellY = 0;
 
           if (pos === 0) {
-            const slot = getHomeSlot(pIndex, tIndex);
+            const slot = getHomeSlot(realPlayerIndex, tIndex);
             const homeXY = getCellXY(cellSize, slot.row, slot.col);
             cellX = homeXY.x;
             cellY = homeXY.y;
@@ -106,20 +157,18 @@ export default function LudoBoard({
           let finalX = centerX - tokenSize / 2;
           let finalY = centerY - tokenSize / 2;
 
-          // stacking offset
           const stackOffsetX = (tIndex % 2) * (tokenSize * 0.18);
           const stackOffsetY = Math.floor(tIndex / 2) * (tokenSize * 0.18);
 
-          const off = getTokenOffset(pIndex);
+          const off = getTokenOffset(realPlayerIndex);
           finalX += stackOffsetX + off.x;
           finalY += stackOffsetY + off.y;
 
-          // padding correction
           finalX += PADDING;
           finalY += PADDING;
 
-          // ✅ HOME POSITION ALWAYS CALCULATED (for cut animation return)
-          const homeSlot = getHomeSlot(pIndex, tIndex);
+          // HOME POSITION (for cutting animation teleport)
+          const homeSlot = getHomeSlot(realPlayerIndex, tIndex);
           const homeXY = getCellXY(cellSize, homeSlot.row, homeSlot.col);
 
           const homeCenterX = homeXY.x + cellSize / 2;
@@ -134,36 +183,32 @@ export default function LudoBoard({
           homeFinalX += PADDING;
           homeFinalY += PADDING;
 
-          const glowColor =
-            pIndex === 0
-              ? "rgba(255,45,45,0.85)"
-              : pIndex === 1
-              ? "rgba(0,255,60,0.85)"
-              : pIndex === 2
-              ? "rgba(255,213,0,0.85)"
-              : "rgba(0,183,255,0.85)";
+          const glowColor = getGlowColor(realPlayerIndex);
 
           return (
             <Token
-              key={`${pIndex}-${tIndex}`}
+              key={`${realPlayerIndex}-${tIndex}`}
               x={finalX}
               y={finalY}
               homeX={homeFinalX}
               homeY={homeFinalY}
               size={tokenSize}
-              image={getTokenImage(pIndex)}
-              highlight={shouldHighlightToken(pIndex, tIndex)}
+              image={getTokenImage(realPlayerIndex)}
+              highlight={shouldHighlightToken(realPlayerIndex, tIndex)}
               glowColor={glowColor}
               isCutting={
-                pos !== 0 && cuttingTokenKey === `${pIndex}-${tIndex}`
+                pos !== 0 && cuttingTokenKey === `${realPlayerIndex}-${tIndex}`
               }
-              kickDirection={getKickDirection(pIndex)}
+              kickDirection={getKickDirection(realPlayerIndex)}
               zIndex={1000 + tIndex}
-              onPress={() => onTokenPress(pIndex, tIndex)}
+              onPress={() => onTokenPress(realPlayerIndex, tIndex)}
+              onStepImpact={(impactX, impactY) =>
+                triggerImpact(impactX, impactY, glowColor)
+              }
             />
           );
-        })
-      )}
+        });
+      })}
     </View>
   );
 }

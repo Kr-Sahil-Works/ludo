@@ -22,6 +22,8 @@ export function useGameLogic({
   winner,
   triggerFirework,
   triggerTrophy,
+  gameMode,
+  activePlayerIndexes,
 }: {
   diceValue: number;
   currentPlayer: number;
@@ -29,13 +31,13 @@ export function useGameLogic({
   winner: string | null;
   triggerFirework: () => void;
   triggerTrophy: () => void;
+  gameMode: "quick" | "classic";
+  activePlayerIndexes: number[];
 }) {
   const dispatch = useDispatch();
 
-  // ✅ Safe tiles positions
   const safePositions = [1, 9, 14, 22, 27, 35, 40, 48];
 
-  // ✅ helper: token finished (106 / 206 / 306 / 406)
   const isTokenFinished = (pos: number) => {
     return pos >= 100 && pos % 100 === 6;
   };
@@ -49,32 +51,30 @@ export function useGameLogic({
   const autoMoveLock = useRef<string | null>(null);
   const mustMoveRef = useRef(false);
   const sixCountRef = useRef(0);
-
-  // ✅ LAST DICE REF (for AI)
   const lastDiceRef = useRef<number>(1);
-
-  // ✅ Prevent double move
   const movingRef = useRef(false);
 
   const [canRollDice, setCanRollDice] = useState(true);
-
-  // ✅ UI last dice
   const [lastDiceValue, setLastDiceValue] = useState<number>(1);
-
-  // ✅ cutting animation trigger key
   const [cuttingTokenKey, setCuttingTokenKey] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState("");
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-
-    setTimeout(() => {
-      setToastMessage("");
-    }, 1400);
+    setTimeout(() => setToastMessage(""), 1400);
   };
 
-  // ✅ reset locks when player changes
+  // ✅ if currentPlayer is not active, auto skip
+  useEffect(() => {
+    if (!activePlayerIndexes.includes(currentPlayer)) {
+      setTimeout(() => {
+        dispatch(nextTurn());
+        dispatch(rollDice(0));
+      }, 200);
+    }
+  }, [currentPlayer, activePlayerIndexes, dispatch]);
+
   useEffect(() => {
     autoMoveLock.current = null;
     mustMoveRef.current = false;
@@ -87,12 +87,10 @@ export function useGameLogic({
     setCuttingTokenKey(null);
   }, [currentPlayer, dispatch]);
 
-  // reset auto move lock when dice changes
   useEffect(() => {
     autoMoveLock.current = null;
   }, [diceValue]);
 
-  // ✅ movable tokens ONLY using redux diceValue
   const movableTokens =
     diceValue > 0
       ? players[currentPlayer].tokens
@@ -104,16 +102,19 @@ export function useGameLogic({
           .map((t: any) => t.idx)
       : [];
 
-  // ✅ Dice roll (AI Integrated)
   const roll = useCallback(() => {
     if (winner) return;
     if (mustMoveRef.current === true) return;
     if (movingRef.current === true) return;
 
+    // ❌ if current player is not active, do nothing
+    if (!activePlayerIndexes.includes(currentPlayer)) return;
+
     const playerTokens = playersRef.current[currentPlayer].tokens;
 
     const enemyTokens = playersRef.current
       .filter((_: any, idx: number) => idx !== currentPlayer)
+      .filter((_: any, idx: number) => activePlayerIndexes.includes(idx))
       .flatMap((p: any) => p.tokens);
 
     const aiDice = getDiceAI({
@@ -127,11 +128,8 @@ export function useGameLogic({
     });
 
     lastDiceRef.current = aiDice;
-
-    // ✅ update UI dice
     setLastDiceValue(aiDice);
 
-    // 6 streak check
     if (aiDice === 6) {
       sixCountRef.current += 1;
 
@@ -154,18 +152,18 @@ export function useGameLogic({
     }
 
     playFX("dice_roll");
-
     dispatch(rollDice(aiDice));
 
     mustMoveRef.current = true;
     setCanRollDice(false);
-  }, [winner, dispatch, currentPlayer]);
+  }, [winner, dispatch, currentPlayer, activePlayerIndexes]);
 
-  // ✅ Move token STEP BY STEP
   const moveSelectedToken = useCallback(
     async (tokenIndex: number) => {
       if (winner) return;
       if (movingRef.current) return;
+
+      if (!activePlayerIndexes.includes(currentPlayer)) return;
 
       const dice = diceValue;
       if (!dice) return;
@@ -177,7 +175,6 @@ export function useGameLogic({
 
         const steps = moveTokenSteps(currentPlayer, tokenPos, dice);
 
-        // ❌ no movement possible
         if (steps.length === 0) {
           mustMoveRef.current = false;
           setCanRollDice(true);
@@ -200,7 +197,6 @@ export function useGameLogic({
         const totalMoveTime = steps.length === 1 ? 350 : 800;
         const stepDelay = Math.floor(totalMoveTime / steps.length);
 
-        // ✅ move step-by-step
         for (let i = 0; i < steps.length; i++) {
           await new Promise((res) => setTimeout(res, stepDelay));
 
@@ -217,13 +213,11 @@ export function useGameLogic({
 
         const finalPos = steps[steps.length - 1];
 
-        // ✅ FINAL HOME SOUND + FIREWORK
         if (finalPos >= 100 && finalPos % 100 === 6) {
           playFX("homepass");
           triggerFirework();
         }
 
-        // ✅ SAFE SPOT SOUND (ONLY STAR SAFE SPOTS)
         const safeSpots = [9, 22, 35, 48];
         const isHomeLane = finalPos >= 100;
 
@@ -231,7 +225,6 @@ export function useGameLogic({
           playFX("safespot");
         }
 
-        // ✅ CUT opponent
         const cuts = findCutTokens(playersRef.current, currentPlayer, finalPos);
 
         for (const cut of cuts) {
@@ -255,24 +248,23 @@ export function useGameLogic({
           dispatch(increaseKillCount({ playerIndex: currentPlayer }));
         }
 
-        // ✅ WINNER CHECK (ALL 4 TOKENS FINISHED)
-        const allFinished = playersRef.current[currentPlayer].tokens.every(
+        // ✅ WINNER CHECK BASED ON MODE
+        const finishedCount = playersRef.current[currentPlayer].tokens.filter(
           (p: number) => isTokenFinished(p)
-        );
+        ).length;
 
-        if (allFinished) {
+        const neededToWin = gameMode === "quick" ? 2 : 4;
+
+        if (finishedCount >= neededToWin) {
           dispatch(setWinner(playersRef.current[currentPlayer].name));
           triggerTrophy();
           movingRef.current = false;
           return;
         }
 
-        // reset dice
         dispatch(rollDice(0));
-
         mustMoveRef.current = false;
 
-        // if dice was 6 -> same player
         if (dice === 6) {
           setCanRollDice(true);
         } else {
@@ -293,16 +285,19 @@ export function useGameLogic({
       diceValue,
       triggerFirework,
       triggerTrophy,
+      gameMode,
+      activePlayerIndexes,
     ]
   );
 
-  // Token press
   const onTokenPress = useCallback(
     (playerIndex: number, tokenIndex: number) => {
       if (winner) return;
       if (playerIndex !== currentPlayer) return;
       if (!diceValue) return;
       if (movingRef.current) return;
+
+      if (!activePlayerIndexes.includes(currentPlayer)) return;
 
       if (!movableTokens.includes(tokenIndex)) return;
 
@@ -319,14 +314,16 @@ export function useGameLogic({
       moveSelectedToken,
       movableTokens,
       diceValue,
+      activePlayerIndexes,
     ]
   );
 
-  // ✅ Auto move
   useEffect(() => {
     if (winner) return;
     if (!diceValue) return;
     if (movingRef.current) return;
+
+    if (!activePlayerIndexes.includes(currentPlayer)) return;
 
     const lockKey = `${currentPlayer}-${diceValue}-${players[
       currentPlayer
@@ -335,7 +332,6 @@ export function useGameLogic({
     if (autoMoveLock.current === lockKey) return;
     autoMoveLock.current = lockKey;
 
-    // no movable tokens
     if (movableTokens.length === 0) {
       mustMoveRef.current = false;
       setCanRollDice(false);
@@ -349,7 +345,6 @@ export function useGameLogic({
       return;
     }
 
-    // only one movable token
     if (movableTokens.length === 1) {
       setCanRollDice(false);
 
@@ -362,7 +357,6 @@ export function useGameLogic({
       return;
     }
 
-    // multiple movable tokens
     setCanRollDice(false);
   }, [
     currentPlayer,
@@ -372,6 +366,7 @@ export function useGameLogic({
     winner,
     dispatch,
     moveSelectedToken,
+    activePlayerIndexes,
   ]);
 
   return {

@@ -16,21 +16,20 @@ const { width } = Dimensions.get("window");
 
 const BackIcon = require("@/src/assets/images/back.png");
 const CoinIcon = require("@/src/assets/images/header/money.png");
+const GemIcon = require("@/src/assets/images/header/gem.png");
 
 type Props = {
   visible: boolean;
-  coins: number;
   onClose: () => void;
   onClassic: () => void;
-  on2v2: () => void;
+  onQuick: () => void;
 };
 
-export default function PassPlaySelectModal({
+export default function PassNPlayModal({
   visible,
-  coins,
   onClose,
   onClassic,
-  on2v2,
+  onQuick,
 }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -59,10 +58,9 @@ export default function PassPlaySelectModal({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
-        {/* BACKGROUND TOUCH CLOSE */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+        <BlurView intensity={95} tint="dark" style={StyleSheet.absoluteFill} />
 
         <Animated.View
           style={[
@@ -73,49 +71,38 @@ export default function PassPlaySelectModal({
             },
           ]}
         >
-          {/* GOLD BORDER */}
           <LinearGradient
             colors={["#ffe168", "#ffb300", "#ff8800"]}
             style={styles.goldBorder}
           >
             <View style={styles.innerCard}>
-              {/* TOP COINS */}
-              <View style={styles.topRow}>
-                <View style={styles.coinRow}>
-                  <Image source={CoinIcon} style={styles.coinIcon} />
-                  <Text style={styles.coinText}>{coins.toLocaleString()}</Text>
-                </View>
-              </View>
 
-              {/* TITLE */}
               <Text style={styles.title}>SELECT GAME</Text>
 
-              {/* BUTTONS */}
               <Pressable style={styles.btnWrap} onPress={onClassic}>
                 <LinearGradient
-                  colors={["#0ef0d1", "#00b7a7", "#009c8e"]}
+                  colors={["#1efbe3", "#00c3b2", "#009e91"]}
                   style={styles.greenBtn}
                 >
                   <Text style={styles.btnText}>CLASSIC</Text>
                 </LinearGradient>
               </Pressable>
 
-              <Pressable style={styles.btnWrap} onPress={on2v2}>
+              <Pressable style={styles.btnWrap} onPress={onQuick}>
                 <LinearGradient
-                  colors={["#0ef0d1", "#00b7a7", "#009c8e"]}
+                  colors={["#1efbe3", "#00c3b2", "#009e91"]}
                   style={styles.greenBtn}
                 >
-                  <Text style={styles.btnText}>2 VS 2</Text>
+                  <Text style={styles.btnText}>QUICK MODE</Text>
                 </LinearGradient>
-              </Pressable>
-
-              {/* BACK ICON BOTTOM LEFT */}
-              <Pressable style={styles.backBtn} onPress={onClose}>
-                <Image source={BackIcon} style={styles.backImg} />
               </Pressable>
             </View>
           </LinearGradient>
         </Animated.View>
+
+        <Pressable style={styles.backBtn} onPress={onClose}>
+          <Image source={BackIcon} style={styles.backImg} />
+        </Pressable>
       </View>
     </Modal>
   );
@@ -147,12 +134,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#7b0000",
     borderRadius: 20,
     padding: 18,
-    paddingBottom: 60,
+    paddingBottom: 24,
   },
 
   topRow: {
     flexDirection: "row",
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 10,
   },
@@ -163,13 +150,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-  coinIcon: {
+  icon: {
     width: 30,
     height: 30,
     resizeMode: "contain",
   },
 
-  coinText: {
+  amount: {
     color: "white",
     fontSize: 18,
     fontWeight: "900",
@@ -216,17 +203,18 @@ const styles = StyleSheet.create({
 
   backBtn: {
     position: "absolute",
-    bottom: 10,
-    left: 10,
-    width: 58,
-    height: 58,
+    bottom: 30,
+    left: 18,
+    width: 70,
+    height: 70,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 9999,
   },
 
   backImg: {
-    width: 58,
-    height: 58,
+    width: 65,
+    height: 65,
     resizeMode: "contain",
   },
 });

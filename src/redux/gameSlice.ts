@@ -8,21 +8,37 @@ type Player = {
   killedCount: number;
 };
 
-type GameState = {
+export type GameState = {
   diceValue: number;
-  lastDiceValue: number; // ✅ NEW
+  lastDiceValue: number;
   currentPlayer: number;
   winner: string | null;
   players: Player[];
   selectedToken: number | null;
+
+  // ✅ Resume System
+  isGameSaved: boolean;
+  gameMode: "quick" | "classic";
+  selectedColors: string[];
+  playerCount: number;
+
+  // ✅ IMPORTANT (FIX COLOR SWAP BUG)
+  activePlayerIndexes: number[];
 };
 
 const initialState: GameState = {
   diceValue: 0,
-  lastDiceValue: 0, // ✅ NEW
+  lastDiceValue: 0,
   currentPlayer: 0,
   winner: null,
   selectedToken: null,
+
+  isGameSaved: false,
+  gameMode: "classic",
+  selectedColors: ["red", "green"],
+  playerCount: 2,
+
+  activePlayerIndexes: [0, 1], // red green default
 
   players: [
     { name: "Red", color: Colors.red, tokens: [0, 0, 0, 0], killedCount: 0 },
@@ -39,7 +55,6 @@ const gameSlice = createSlice({
     rollDice: (state, action: PayloadAction<number>) => {
       state.diceValue = action.payload;
 
-      // ✅ store last dice ONLY if valid roll
       if (action.payload > 0) {
         state.lastDiceValue = action.payload;
       }
@@ -48,12 +63,9 @@ const gameSlice = createSlice({
     nextTurn: (state) => {
       state.currentPlayer = (state.currentPlayer + 1) % 4;
       state.selectedToken = null;
-
-      // ✅ reset dice
       state.diceValue = 0;
-
-      // ✅ IMPORTANT: clear lastDiceValue so new player doesn't flash old dice
-          },
+      state.lastDiceValue = 0;
+    },
 
     selectToken: (state, action: PayloadAction<number>) => {
       state.selectedToken = action.payload;
@@ -69,6 +81,7 @@ const gameSlice = createSlice({
     ) => {
       const { playerIndex, tokenIndex, newPosition } = action.payload;
       state.players[playerIndex].tokens[tokenIndex] = newPosition;
+      state.isGameSaved = true;
     },
 
     resetToken: (
@@ -80,6 +93,7 @@ const gameSlice = createSlice({
     ) => {
       const { playerIndex, tokenIndex } = action.payload;
       state.players[playerIndex].tokens[tokenIndex] = 0;
+      state.isGameSaved = true;
     },
 
     increaseKillCount: (
@@ -90,10 +104,65 @@ const gameSlice = createSlice({
     ) => {
       const { playerIndex } = action.payload;
       state.players[playerIndex].killedCount += 1;
+      state.isGameSaved = true;
     },
 
     setWinner: (state, action: PayloadAction<string | null>) => {
       state.winner = action.payload;
+
+      if (action.payload) {
+        state.isGameSaved = false;
+      }
+    },
+
+    // ✅ SAVE GAME SETTINGS WHEN GAME STARTS
+    setGameConfig: (
+      state,
+      action: PayloadAction<{
+        gameMode: "quick" | "classic";
+        selectedColors: string[];
+        playerCount: number;
+      }>
+    ) => {
+      state.gameMode = action.payload.gameMode;
+      state.selectedColors = action.payload.selectedColors;
+      state.playerCount = action.payload.playerCount;
+
+      // ✅ SAVE ACTIVE PLAYER INDEXES (FIX RESUME COLOR SWAP)
+      const map: any = {
+        red: 0,
+        green: 1,
+        yellow: 2,
+        blue: 3,
+      };
+
+      state.activePlayerIndexes = action.payload.selectedColors.map(
+        (c) => map[c.toLowerCase()]
+      );
+
+      state.isGameSaved = true;
+    },
+
+    loadSavedGameState: (state, action: PayloadAction<GameState>) => {
+      return action.payload;
+    },
+
+    clearSavedGame: (state) => {
+      state.diceValue = 0;
+      state.lastDiceValue = 0;
+      state.currentPlayer = 0;
+      state.winner = null;
+      state.selectedToken = null;
+
+      state.isGameSaved = false;
+
+      state.gameMode = "classic";
+      state.selectedColors = ["red", "green"];
+      state.playerCount = 2;
+
+      state.activePlayerIndexes = [0, 1];
+
+      state.players = JSON.parse(JSON.stringify(initialState.players));
     },
 
     resetGame: () => {
@@ -111,6 +180,10 @@ export const {
   selectToken,
   resetToken,
   increaseKillCount,
+
+  setGameConfig,
+  loadSavedGameState,
+  clearSavedGame,
 } = gameSlice.actions;
 
 export default gameSlice.reducer;

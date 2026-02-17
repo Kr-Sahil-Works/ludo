@@ -3,6 +3,11 @@ import { createAudioPlayer, AudioPlayer } from "expo-audio";
 let bgPlayer: AudioPlayer | null = null;
 let fxPlayer: AudioPlayer | null = null;
 
+// ✅ GLOBAL SETTINGS
+let FX_ENABLED = true;
+let MUSIC_ENABLED = false; // ✅ DEFAULT MUSIC OFF
+let ALL_SOUND_ENABLED = true;
+
 const soundFiles: Record<string, any> = {
   home: require("../assets/sounds/hometrack.mp3"),
   game_start: require("../assets/sounds/game_start.mp3"),
@@ -20,10 +25,48 @@ const soundFiles: Record<string, any> = {
   homepass: require("../assets/sounds/homepass.mp3"),
 };
 
+// ✅ ENABLE/DISABLE FUNCTIONS
+export function setFXEnabled(value: boolean) {
+  FX_ENABLED = value;
+  if (!value) stopFX();
+}
+
+export function setMusicEnabled(value: boolean) {
+  MUSIC_ENABLED = value;
+
+  if (!value) {
+    stopBG();
+  }
+}
+
+export function setAllSoundEnabled(value: boolean) {
+  ALL_SOUND_ENABLED = value;
+
+  if (!value) {
+    stopAllSound();
+  }
+}
+
+export function getFXEnabled() {
+  return FX_ENABLED;
+}
+
+export function getMusicEnabled() {
+  return MUSIC_ENABLED;
+}
+
+export function getAllSoundEnabled() {
+  return ALL_SOUND_ENABLED;
+}
+
 // ✅ BACKGROUND SOUND (music)
 export function playBG(name: string) {
   try {
     if (!soundFiles[name]) return;
+
+    // ❌ BLOCK IF SOUND OFF
+    if (!ALL_SOUND_ENABLED) return;
+    if (!MUSIC_ENABLED) return;
 
     if (bgPlayer) {
       bgPlayer.pause();
@@ -45,6 +88,10 @@ export function playBG(name: string) {
 export function playFX(name: string) {
   try {
     if (!soundFiles[name]) return;
+
+    // ❌ BLOCK IF SOUND OFF
+    if (!ALL_SOUND_ENABLED) return;
+    if (!FX_ENABLED) return;
 
     if (fxPlayer) {
       fxPlayer.pause();

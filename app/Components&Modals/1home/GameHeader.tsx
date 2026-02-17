@@ -58,7 +58,7 @@ export default function GameHeader({
 
   const handleCoinsPress = () => {
   if (!isSignedIn) {
-    router.push("/login");
+    router.push("/auth/login");
     return;
   }
   router.push("/inventory");
@@ -66,7 +66,7 @@ export default function GameHeader({
 
 const handleGemsPress = () => {
   if (!isSignedIn) {
-    router.push("/login");
+    router.push("/auth/login");
     return;
   }
   router.push("/inventory");
@@ -118,9 +118,9 @@ const handleSettingsPress = () => {
           style={styles.profileBox}
           onPress={() => {
             if (isSignedIn) {
-              router.push("/profile");
+              router.push("/auth/profile");
             } else {
-              router.push("/login");
+              router.push("/auth/login");
             }
           }}
         >
@@ -169,13 +169,13 @@ const handleSettingsPress = () => {
           ) : (
             <>
               <GlassPill
-                icon={require("../assets/images/header/money.png")}
+                icon={require("@/src/assets/images/header/money.png")}
                 value={formatNumber(isSignedIn && isLoaded ? displayCoins : 0)}
                 onPressPlus={handleCoinsPress}
               />
 
               <GlassPill
-                icon={require("../assets/images/header/gem.png")}
+                icon={require("@/src/assets/images/header/gem.png")}
                 value={formatNumber(isSignedIn && isLoaded ? displayGems : 0)}
                onPressPlus={handleGemsPress}
               />
@@ -187,7 +187,7 @@ const handleSettingsPress = () => {
         <View style={styles.rightBox}>
           <Pressable style={styles.iconBtn} onPress={handleStorePress}>
             <Image
-              source={require("../assets/images/header/carts.png")}
+              source={require("@/src/assets/images/header/carts.png")}
               style={styles.iconImg}
               resizeMode="contain"
             />
@@ -195,7 +195,7 @@ const handleSettingsPress = () => {
 
           <Pressable style={styles.iconBtn} onPress={handleSettingsPress}>
             <Image
-              source={require("../assets/images/header/settings.png")}
+              source={require("@/src/assets/images/header/settings.png")}
               style={styles.iconImg}
               resizeMode="contain"
             />
@@ -311,7 +311,7 @@ function DoubleWalletPill({ coins, gems, onPressCoins, onPressGems }: any) {
 
       <View style={styles.doubleItem}>
         <Image
-          source={require("../assets/images/header/money.png")}
+          source={require("@/src/assets/images/header/money.png")}
           style={styles.smallIcon}
           resizeMode="contain"
         />
@@ -326,7 +326,7 @@ function DoubleWalletPill({ coins, gems, onPressCoins, onPressGems }: any) {
 
       <View style={styles.doubleItem}>
         <Image
-          source={require("../assets/images/header/gem.png")}
+          source={require("@/src/assets/images/header/gem.png")}
           style={styles.smallIcon}
           resizeMode="contain"
         />
@@ -546,16 +546,13 @@ const styles = StyleSheet.create({
     width: width < 380 ? width * 0.075 : width * 0.082,
     height: width < 380 ? width * 0.075 : width * 0.082,
     borderRadius: 18,
-    backgroundColor: "rgba(46, 83, 171, 0.22)",
-    borderWidth: 1.4,
-    borderColor: "rgba(255,255,255,0.55)",
     justifyContent: "center",
     alignItems: "center",
   },
 
   iconImg: {
-    width: "65%",
-    height: "65%",
+    width: "140%",
+    height: "140%",
   },
 
   doublePill: {

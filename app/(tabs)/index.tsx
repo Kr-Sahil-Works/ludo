@@ -13,27 +13,28 @@ import LottieView from "lottie-react-native";
 import { Easing } from "react-native";
 
 import { useDispatch, useSelector } from "react-redux";
-import type { RootState, AppDispatch } from "../../src/redux/store";
-import { resetGame } from "../../src/redux/gameSlice";
+import type { RootState, AppDispatch } from "@/src/redux/store";
+import { resetGame } from "@/src/redux/gameSlice";
 
-import ComingSoonModal from "../../src/components/ComingSoonModal";
-import HomeLoader from "../../src/components/HomeLoader";
+import ComingSoonModal from "@/app/Components&Modals/1home/ComingSoonModal";
+import HomeLoader from "@/src/components/Loaders/HomeLoader";
 
 import { playBG, playFX, stopBG } from "../../src/utils/sound";
-import GameHeader from "@/src/components/GameHeader";
+import GameHeader from "@/app/Components&Modals/1home/GameHeader";
 
-import { setHomeLoading } from "../../src/redux/uiSlice";
-import SpinWheelModal from "@/src/components/SpinWheelModal";
-import PassPlaySelectModal from "@/src/components/PassNPlayModal";
+import { setHomeLoading } from "@/src/redux/uiSlice";
+import SpinWheelModal from "@/app/Components&Modals/1home/SpinWheelModal";
+import SelectPersonTokenModal from "@/app/Components&Modals/2passNplay/SelectPersonTokenModal";
 
 
-import ModeCard from "@/src/components/ModeCard";
+import ModeCard from "@/app/Components&Modals/1home/ModeCard";
 
 import { useUser } from "@clerk/clerk-expo";
+import PassNPlayModal from "@/app/Components&Modals/2passNplay/PassNPlayModal";
 
-const Logo: any = require("../../src/assets/images/brightlogo.png");
-const HomeBG: any = require("../../src/assets/images/hf2.png");
-const Witch: any = require("../../src/assets/animation/witch.json");
+const Logo: any = require("@/src/assets/images/brightlogo.png");
+const HomeBG: any = require("@/src/assets/images/hf2.png");
+const Witch: any = require("@/src/assets/animation/witch.json");
 
 const SpinBtn = require("@/src/assets/images/spin.png");
 
@@ -49,6 +50,8 @@ export default function HomeScreen() {
   const [showSpin, setShowSpin] = useState(false);
   const [showPassPlaySelect, setShowPassPlaySelect] = useState(false);
 
+const [showSelectModal, setShowSelectModal] = useState(false);
+const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic");
 
 
   const dispatch = useDispatch<AppDispatch>();
@@ -62,7 +65,7 @@ export default function HomeScreen() {
     const timer = setTimeout(() => {
       setLoading(false);
       dispatch(setHomeLoading(false));
-    }, 1800);
+    }, 800);
 
     return () => clearTimeout(timer);
   }, []);
@@ -232,7 +235,7 @@ export default function HomeScreen() {
     }
 
     playFX("game_start");
-    router.push("../gamepages/classicPNPgame");
+    router.push("/gameScreens/PassNPlayGame");
   };
 
   const handleNewGamePress = useCallback(() => {
@@ -246,8 +249,7 @@ export default function HomeScreen() {
   // 🔒 Login required only for Online + Snake Ladder
   const openLockedMode = () => {
     if (!isSignedIn) {
-      playFX("ui");
-      router.push("../login");
+      router.push("/auth/login");
       return;
     }
 
@@ -360,27 +362,26 @@ export default function HomeScreen() {
 
           {/* BUTTON GRID */}
           <View style={styles.modeGrid}>
-            {hasGameStarted && (
-              <ModeCard
-                title="Resume"
-                subtitle="Continue game"
-                icon={Earth}
-                color="#00eaff"
-                onPress={handleResumePress}
-              />
-            )}
-
-            {/* ✅ WORKS WITHOUT LOGIN */}
-            <ModeCard
-  title="Pass N Play"
-  subtitle="Local match"
-  icon={Pass}
-  color="#ff3b30"
-  onPress={() => {
-    playFX("ui");
-    setShowPassPlaySelect(true);
-  }}
-/>
+         {/* ✅ RESUME OR PASS N PLAY (ONLY ONE) */}
+  {hasGameStarted ? (
+    <ModeCard
+      title="Resume"
+      subtitle="Continue game"
+      icon={Earth}
+      color="#00eaff"
+      onPress={handleResumePress}
+    />
+  ) : (
+    <ModeCard
+      title="Pass N Play"
+      subtitle="Local match"
+      icon={Pass}
+      color="#ff3b30"
+      onPress={() => {
+        setShowPassPlaySelect(true);
+      }}
+    />
+  )}
 
 
             {/* ✅ WORKS WITHOUT LOGIN */}
@@ -451,17 +452,39 @@ export default function HomeScreen() {
     }}
   />
 )}
-<PassPlaySelectModal
+<PassNPlayModal
   visible={showPassPlaySelect}
-  coins={2825} // later connect redux/convex coins
+  coins={2825}
+  gems={167}
   onClose={() => setShowPassPlaySelect(false)}
   onClassic={() => {
-    setShowPassPlaySelect(false);
-    handleNewGamePress(); // goes to /game
-  }}
-  on2v2={() => {
-    setShowPassPlaySelect(false);
-    setShowComingSoon(true); // for now
+  setSelectedMode("classic");
+  setShowPassPlaySelect(false);
+  setShowSelectModal(true);
+}}
+
+  onQuick={() => {
+  setSelectedMode("quick");
+  setShowPassPlaySelect(false);
+  setShowSelectModal(true);
+}}
+
+/>
+
+<SelectPersonTokenModal
+  visible={showSelectModal}
+  mode={selectedMode}
+  onClose={() => setShowSelectModal(false)}
+  onPlay={(players, colors) => {
+    setShowSelectModal(false);
+
+    router.push({
+      pathname: "/gameScreens/PassNPlayGame",
+      params: {
+        players: String(players),
+        colors: colors.join(","),
+      },
+    });
   }}
 />
 

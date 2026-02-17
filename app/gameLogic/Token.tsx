@@ -24,6 +24,8 @@ type Props = {
   homeY?: number;
 
   kickDirection?: "left" | "right" | "up" | "down";
+  onStepImpact?: (x: number, y: number, color?: string) => void;
+
 };
 
 export default function Token({
@@ -40,6 +42,7 @@ export default function Token({
   homeX = 0,
   homeY = 0,
   kickDirection = "right",
+  onStepImpact,
 }: Props) {
   const animX = useRef(new Animated.Value(x)).current;
   const animY = useRef(new Animated.Value(y)).current;
@@ -69,24 +72,28 @@ export default function Token({
   const dustOpacity = useRef(new Animated.Value(0)).current;
 
   // movement animation (NORMAL)
-  useEffect(() => {
-    if (isCutting) return;
+ useEffect(() => {
+  if (isCutting) return;
 
-    Animated.parallel([
-      Animated.spring(animX, {
-        toValue: x,
-        speed: 22,
-        bounciness: 10,
-        useNativeDriver: true,
-      }),
-      Animated.spring(animY, {
-        toValue: y,
-        speed: 22,
-        bounciness: 10,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [x, y, isCutting]);
+  // trigger impact pulse on every move
+  onStepImpact?.(x, y, glowColor);
+
+  Animated.parallel([
+    Animated.spring(animX, {
+      toValue: x,
+      speed: 22,
+      bounciness: 10,
+      useNativeDriver: true,
+    }),
+    Animated.spring(animY, {
+      toValue: y,
+      speed: 22,
+      bounciness: 10,
+      useNativeDriver: true,
+    }),
+  ]).start();
+}, [x, y, isCutting]);
+
 
   // glow pulse animation
   useEffect(() => {
