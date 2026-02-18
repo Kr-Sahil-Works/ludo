@@ -75,12 +75,12 @@ export default function SettingsScreen() {
 
           <View style={styles.walletRow}>
             <WalletMini
-              icon={require("../../src/assets/images/header/money.png")}
+              icon={require("@/src/assets/images/header/money.png")}
               value="2.4K"
               label="Coins"
             />
             <WalletMini
-              icon={require("../../src/assets/images/header/gem.png")}
+              icon={require("@/src/assets/images/header/gem.png")}
               value="150"
               label="Gems"
             />

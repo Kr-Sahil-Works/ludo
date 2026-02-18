@@ -5,11 +5,13 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 
 import { useOAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import * as AuthSession from "expo-auth-session";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -18,37 +20,32 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const loginWithGoogle = async () => {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const result = await startOAuthFlow({
-      redirectUrl: "ludo://oauth-native-callback",
-    });
+      const redirectUrl = AuthSession.makeRedirectUri({
+        scheme: "ludo",
+      });
 
-    console.log("OAUTH RESULT:", result);
+      console.log("REDIRECT URL:", redirectUrl);
 
-    const { createdSessionId, setActive } = result;
+      const { createdSessionId, setActive } = await startOAuthFlow({
+        redirectUrl,
+      });
 
-    console.log("createdSessionId:", createdSessionId);
-
-    if (createdSessionId) {
-      await setActive?.({ session: createdSessionId });
-
-      console.log("SESSION ACTIVATED SUCCESS");
-
-      router.replace("/(tabs)");
-    } else {
-      console.log("NO SESSION CREATED");
-      alert("Login failed: No session created");
+      if (createdSessionId) {
+        await setActive?.({ session: createdSessionId });
+        router.replace("/(tabs)");
+      } else {
+        Alert.alert("Login Failed", "No session created.");
+      }
+    } catch (err) {
+      console.log("Google login error FULL:", err);
+      Alert.alert("Login Error", "Google login failed. Check console.");
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.log("Google login error FULL:", err);
-    alert("Google login error. Check console.");
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   return (
     <LinearGradient
@@ -56,7 +53,10 @@ export default function LoginScreen() {
       style={styles.container}
     >
       {/* CLOSE BUTTON */}
-      <Pressable style={styles.closeBtn} onPress={() => router.replace("/")}>
+      <Pressable
+        style={styles.closeBtn}
+        onPress={() => router.replace("/(tabs)")}
+      >
         <Text style={styles.closeText}>✕</Text>
       </Pressable>
 
@@ -66,7 +66,7 @@ export default function LoginScreen() {
 
         {/* GOOGLE LOGIN */}
         <Pressable
-          style={styles.googleBtn}
+          style={[styles.googleBtn, loading && { opacity: 0.7 }]}
           onPress={loginWithGoogle}
           disabled={loading}
         >
@@ -85,7 +85,10 @@ export default function LoginScreen() {
         </View>
 
         {/* BACK BUTTON */}
-        <Pressable style={styles.backBtn} onPress={() => router.replace("/")}>
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => router.replace("/(tabs)")}
+        >
           <Text style={styles.backText}>← Back to Home</Text>
         </Pressable>
       </View>

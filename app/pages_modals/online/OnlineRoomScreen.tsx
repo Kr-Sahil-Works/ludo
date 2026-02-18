@@ -1,0 +1,734 @@
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
+  Vibration,
+  useWindowDimensions,
+} from "react-native";
+
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+
+const BackIcon = require("@/src/assets/images/back.png");
+
+// coin icons
+const Coin100 = require("@/src/assets/images/header/coins/coins100.png");
+const Coin300 = require("@/src/assets/images/header/coins/coins300.png");
+const Coin500 = require("@/src/assets/images/header/coins/coins500.png");
+const Coin1000 = require("@/src/assets/images/header/coins/coins1k.png");
+const Coin2500 = require("@/src/assets/images/header/coins/coins2.5k.png");
+const Coin5000 = require("@/src/assets/images/header/coins/coins5k.png");
+
+const CoinBag10k = require("@/src/assets/images/header/coins/coinbag10k.png");
+const CoinBag25k = require("@/src/assets/images/header/coins/coinbag25k.png");
+const CoinBag50k = require("@/src/assets/images/header/coins/coinbag50k.png");
+const LockIcon = require("@/src/assets/images/header/coins/lock.png");
+
+const ENTRY_LIST = [100, 300, 500, 1000, 2500, 5000, 10000, 25000, 50000];
+
+export default function OnlineRoomScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+
+  // scale helper
+  const s = (val: number) => {
+    const base = 390;
+    const scale = width / base;
+    return Math.round(val * Math.min(Math.max(scale, 0.85), 1.4));
+  };
+
+  const [activeTab, setActiveTab] = useState<"create" | "join">("create");
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const [entryIndex, setEntryIndex] = useState(0);
+  const entryCoins = ENTRY_LIST[entryIndex];
+
+  const isLocked = entryCoins > 5000;
+  const isHighLobby = entryCoins >= 10000;
+
+  const joinRoom = useMutation(api.rooms.joinRoom);
+
+  const userId = "user123"; // later Clerk user.id
+  const userName = "Player";
+
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const coinScale = useRef(new Animated.Value(1)).current;
+  const coinFade = useRef(new Animated.Value(1)).current;
+  const shineAnim = useRef(new Animated.Value(-200)).current;
+
+  const styles = useMemo(() => {
+    const panelWidth = Math.min(width * 0.9, isTablet ? 520 : 420);
+
+    return StyleSheet.create({
+      shine: {
+        position: "absolute",
+        top: -s(50),
+        left: 0,
+        width: s(140),
+        height: s(260),
+        opacity: 0.7,
+      },
+
+      container: {
+        flex: 1,
+        backgroundColor: "#0a0a0a",
+        justifyContent: "center",
+        alignItems: "center",
+      },
+
+      overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: "rgba(0,0,0,0.6)",
+      },
+
+      backBtn: {
+        position: "absolute",
+        left: s(14),
+        bottom: s(18),
+        zIndex: 999,
+        width: s(75),
+        height: s(75),
+        justifyContent: "center",
+        alignItems: "center",
+      },
+
+      backIcon: {
+        width: s(62),
+        height: s(62),
+        resizeMode: "contain",
+      },
+
+      panel: {
+        width: panelWidth,
+        backgroundColor: "#7b0c0c",
+        borderRadius: s(18),
+        borderWidth: s(4),
+        borderColor: "#e8ae02",
+        paddingBottom: s(22),
+        shadowColor: "#f4c400",
+        shadowRadius: s(20),
+        elevation: 20,
+      },
+
+      tabWrapper: {
+        flexDirection: "row",
+        width: "88%",
+        alignSelf: "center",
+        marginTop: -s(22),
+        borderWidth: s(4),
+        borderColor: "#e8ae02",
+        borderRadius: s(18),
+        overflow: "hidden",
+        backgroundColor: "#5e0909",
+        elevation: 15,
+      },
+
+      tabHalf: {
+        flex: 1,
+        paddingVertical: s(12),
+        justifyContent: "center",
+        alignItems: "center",
+      },
+
+      tabDivider: {
+        width: s(3),
+        backgroundColor: "#f4c400",
+      },
+
+      tabHalfActive: {
+        backgroundColor: "#a31111",
+      },
+
+      tabText: {
+        fontSize: s(18),
+        fontWeight: "900",
+        color: "#ffd24a",
+        textTransform: "uppercase",
+      },
+
+      tabTextActive: {
+        color: "#fff3b0",
+      },
+
+      body: {
+        paddingTop: s(32),
+        paddingHorizontal: s(18),
+        alignItems: "center",
+      },
+
+      title: {
+        fontSize: s(22),
+        fontWeight: "900",
+        color: "#ffd24a",
+        textTransform: "uppercase",
+        marginBottom: s(18),
+        textAlign: "center",
+      },
+
+      inputBox: {
+        width: "100%",
+        backgroundColor: "#ffffff",
+        borderRadius: s(12),
+        borderWidth: s(3),
+        borderColor: "#c4eaf2",
+        paddingHorizontal: s(12),
+        paddingVertical: s(12),
+        marginBottom: s(18),
+      },
+
+      input: {
+        fontSize: s(16),
+        fontWeight: "800",
+        color: "#333",
+        letterSpacing: 2,
+        textAlign: "center",
+      },
+
+      lockMessage: {
+        marginTop: s(12),
+        fontSize: s(13),
+        fontWeight: "900",
+        color: "#ffd24a",
+        textAlign: "center",
+        textTransform: "uppercase",
+      },
+
+      entryBox: {
+        width: "100%",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: s(20),
+      },
+
+      circleBtn: {
+        width: s(58),
+        height: s(58),
+        borderRadius: s(14),
+        borderWidth: s(3),
+        borderColor: "#ffd24a",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#5e0909",
+      },
+
+      circleText: {
+        fontSize: s(30),
+        fontWeight: "900",
+        color: "#fff",
+      },
+
+      entryCardOuter: {
+        flex: 1,
+        marginHorizontal: s(12),
+        borderRadius: s(18),
+        borderWidth: s(5),
+        borderColor: "#ffb900",
+        backgroundColor: "#f0c100",
+        overflow: "hidden",
+        elevation: 12,
+        minHeight: s(165),
+      },
+
+      lockedCard: {
+        opacity: 0.55,
+      },
+
+      entryCardInner: {
+        height: s(125),
+        justifyContent: "center",
+        alignItems: "center",
+        position: "relative",
+        overflow: "hidden",
+      },
+
+      coinRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "92%",
+      },
+
+      coinIconNormal: {
+        width: s(52),
+        height: s(52),
+      },
+
+      coinIconHigh: {
+        width: s(82),
+        height: s(82),
+      },
+
+      amountBox: {
+        backgroundColor: "#1d1710ac",
+        paddingHorizontal: s(16),
+        paddingVertical: s(6),
+        borderRadius: s(14),
+        borderWidth: s(2),
+        borderColor: "rgba(255,255,255,0.25)",
+        marginLeft: s(10),
+        minWidth: s(90),
+        alignItems: "center",
+      },
+
+      amountBoxBig: {
+        paddingHorizontal: s(14),
+        paddingVertical: s(6),
+        borderRadius: s(18),
+        borderWidth: s(2),
+        minWidth: s(120),
+      },
+
+      coinValueNormal: {
+        fontSize: s(28),
+      },
+
+      coinValueHigh: {
+        fontSize: s(24),
+      },
+
+      coinValue: {
+        fontWeight: "900",
+        color: "#fff",
+        textShadowColor: "#000",
+        textShadowOffset: { width: 2, height: 2 },
+        textShadowRadius: 2,
+      },
+
+      lockedText: {
+        opacity: 0.6,
+      },
+
+      lockCenterBig: {
+        position: "absolute",
+        width: s(92),
+        height: s(92),
+        opacity: 0.95,
+        alignSelf: "center",
+      },
+
+      lockIconSmall: {
+        position: "absolute",
+        right: s(10),
+        top: s(10),
+        width: s(32),
+        height: s(32),
+        opacity: 0.9,
+      },
+
+      entryBottom: {
+        backgroundColor: "#ffb900",
+        paddingVertical: s(14),
+        alignItems: "center",
+        justifyContent: "center",
+      },
+
+      entryText: {
+        fontSize: s(18),
+        fontWeight: "900",
+        color: "#fff",
+        textTransform: "uppercase",
+      },
+
+      mainBtn: {
+        width: "100%",
+        borderRadius: s(18),
+        overflow: "hidden",
+        borderWidth: s(4),
+        borderColor: "#e8ae02",
+      },
+
+      btnGradient: {
+        paddingVertical: s(14),
+        alignItems: "center",
+      },
+
+      mainBtnText: {
+        fontSize: s(20),
+        fontWeight: "900",
+        color: "#ffffff",
+        textTransform: "uppercase",
+      },
+    });
+  }, [width]);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shineAnim, {
+          toValue: 300,
+          duration: 2500,
+          useNativeDriver: true,
+        }),
+        Animated.delay(800),
+        Animated.timing(shineAnim, {
+          toValue: -200,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  const animateCoinChange = () => {
+    coinScale.setValue(0.85);
+    coinFade.setValue(0.3);
+
+    Animated.parallel([
+      Animated.timing(coinScale, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(coinFade, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const getCoinIcon = () => {
+    if (entryCoins === 100) return Coin100;
+    if (entryCoins === 300) return Coin300;
+    if (entryCoins === 500) return Coin500;
+    if (entryCoins === 1000) return Coin1000;
+    if (entryCoins === 2500) return Coin2500;
+    if (entryCoins === 5000) return Coin5000;
+    if (entryCoins === 10000) return CoinBag10k;
+    if (entryCoins === 25000) return CoinBag25k;
+    if (entryCoins === 50000) return CoinBag50k;
+    return Coin100;
+  };
+
+  const handleMinus = () => {
+    Vibration.vibrate(20);
+
+    setEntryIndex((prev) => {
+      const newIndex = Math.max(0, prev - 1);
+      if (newIndex !== prev) animateCoinChange();
+      return newIndex;
+    });
+  };
+
+  const handlePlus = () => {
+    Vibration.vibrate(20);
+
+    setEntryIndex((prev) => {
+      const newIndex = Math.min(ENTRY_LIST.length - 1, prev + 1);
+      if (newIndex !== prev) animateCoinChange();
+      return newIndex;
+    });
+  };
+
+  const handleJoin = async () => {
+    try {
+      if (!code.trim()) return;
+
+      setLoading(true);
+
+      await joinRoom({
+        code: code.trim().toUpperCase(),
+        userId,
+        name: userName,
+      });
+
+      router.push({
+        pathname: "/pages_modals/online/room/[code]",
+        params: { code: code.trim().toUpperCase() },
+      });
+    } catch (err: any) {
+      console.log("JOIN ROOM ERROR:", err?.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoSelectMode = () => {
+    if (isLocked) return;
+
+    router.push({
+      pathname: "/pages_modals/online/selectMode",
+      params: { entryCoins: String(entryCoins) },
+    });
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <View style={styles.container}>
+        <View style={styles.overlay} />
+
+        {/* BACK BUTTON */}
+        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Image source={BackIcon} style={styles.backIcon} />
+        </Pressable>
+
+        {/* MAIN PANEL */}
+        <Animated.View
+          style={[
+            styles.panel,
+            {
+              shadowOpacity: glowAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.3, 0.9],
+              }),
+            },
+          ]}
+        >
+          {/* TOP TABS */}
+          <View style={styles.tabWrapper}>
+            <Pressable
+              style={[
+                styles.tabHalf,
+                activeTab === "create" && styles.tabHalfActive,
+              ]}
+              onPress={() => setActiveTab("create")}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === "create" && styles.tabTextActive,
+                ]}
+              >
+                CREATE
+              </Text>
+            </Pressable>
+
+            <View style={styles.tabDivider} />
+
+            <Pressable
+              style={[
+                styles.tabHalf,
+                activeTab === "join" && styles.tabHalfActive,
+              ]}
+              onPress={() => setActiveTab("join")}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === "join" && styles.tabTextActive,
+                ]}
+              >
+                JOIN
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* BODY */}
+          <View style={styles.body}>
+            {activeTab === "join" ? (
+              <>
+                <Text style={styles.title}>ENTER PRIVATE CODE</Text>
+
+                <View style={styles.inputBox}>
+                  <TextInput
+                    placeholder="Enter private code here..."
+                    placeholderTextColor="#bdbdbd"
+                    value={code}
+                    onChangeText={setCode}
+                    style={styles.input}
+                    maxLength={6}
+                    keyboardType="number-pad"
+                    inputMode="numeric"
+                    returnKeyType="done"
+                  />
+                </View>
+
+                <Pressable
+                  style={[styles.mainBtn, loading && { opacity: 0.6 }]}
+                  onPress={handleJoin}
+                  disabled={loading}
+                >
+                  <LinearGradient
+                    colors={["#1ed6d6", "#025c5c"]}
+                    style={styles.btnGradient}
+                  >
+                    <Text style={styles.mainBtnText}>
+                      {loading ? "Joining..." : "Join Room"}
+                    </Text>
+                  </LinearGradient>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={styles.title}>SELECT LOBBY</Text>
+
+                {/* ENTRY BOX */}
+                <View style={styles.entryBox}>
+                  <Pressable style={styles.circleBtn} onPress={handleMinus}>
+                    <Text style={styles.circleText}>-</Text>
+                  </Pressable>
+
+                  <View
+                    style={[
+                      styles.entryCardOuter,
+                      isLocked && styles.lockedCard,
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={["#ffaa00", "#b3aa00", "#9f7618"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.entryCardInner}
+                    >
+                      {/* SHINE */}
+                      <Animated.View
+                        pointerEvents="none"
+                        style={[
+                          styles.shine,
+                          {
+                            transform: [
+                              { translateX: shineAnim },
+                              { rotate: "-20deg" },
+                            ],
+                          },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={[
+                            "rgba(255,255,255,0)",
+                            "rgba(255,255,255,0.55)",
+                            "rgba(255,255,255,0)",
+                          ]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={StyleSheet.absoluteFillObject}
+                        />
+                      </Animated.View>
+
+                      {/* COIN CONTENT */}
+                      <Animated.View
+                        style={[
+                          styles.coinRow,
+                          {
+                            opacity: coinFade,
+                            transform: [{ scale: coinScale }],
+                          },
+                        ]}
+                      >
+                        <Image
+                          source={getCoinIcon()}
+                          style={
+                            isHighLobby
+                              ? styles.coinIconHigh
+                              : styles.coinIconNormal
+                          }
+                          resizeMode="contain"
+                        />
+
+                        <View
+                          style={[
+                            styles.amountBox,
+                            isHighLobby && styles.amountBoxBig,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.coinValue,
+                              isHighLobby
+                                ? styles.coinValueHigh
+                                : styles.coinValueNormal,
+                              isLocked && styles.lockedText,
+                            ]}
+                          >
+                            {entryCoins}
+                          </Text>
+                        </View>
+                      </Animated.View>
+
+                      {/* LOCK */}
+                      {isLocked && isHighLobby && (
+                        <Image
+                          source={LockIcon}
+                          style={styles.lockCenterBig}
+                          resizeMode="contain"
+                        />
+                      )}
+
+                      {isLocked && !isHighLobby && (
+                        <Image
+                          source={LockIcon}
+                          style={styles.lockIconSmall}
+                          resizeMode="contain"
+                        />
+                      )}
+                    </LinearGradient>
+
+                    <View style={styles.entryBottom}>
+                      <Text style={styles.entryText}>ENTRY</Text>
+                    </View>
+                  </View>
+
+                  <Pressable style={styles.circleBtn} onPress={handlePlus}>
+                    <Text style={styles.circleText}>+</Text>
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  style={[
+                    styles.mainBtn,
+                    (loading || isLocked) && { opacity: 0.6 },
+                  ]}
+                  onPress={handleGoSelectMode}
+                  disabled={loading}
+                >
+                  <LinearGradient
+                    colors={["#9fd21d", "#605505"]}
+                    style={styles.btnGradient}
+                  >
+                    <Text style={styles.mainBtnText}>
+                      {isLocked ? "Locked" : "Next"}
+                    </Text>
+                  </LinearGradient>
+                </Pressable>
+
+                {isLocked && (
+                  <Text style={styles.lockMessage}>
+                    Reach Level 10 to unlock this lobby
+                  </Text>
+                )}
+              </>
+            )}
+          </View>
+        </Animated.View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}

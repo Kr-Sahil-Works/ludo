@@ -19,10 +19,11 @@ const SparkAnim = require("@/src/assets/animation/gold_spark.json");
 
 const { width } = Dimensions.get("window");
 
-const RedToken = require("@/src/assets/images/piles/red_1024.png");
-const GreenToken = require("@/src/assets/images/piles/green_1024.png");
-const YellowToken = require("@/src/assets/images/piles/yellow_1024.png");
-const BlueToken = require("@/src/assets/images/piles/blue_1024.png");
+const RedToken = require("@/src/assets/images/piles/red_1024_transparent.png");
+const GreenToken = require("@/src/assets/images/piles/green_1024_transparent.png");
+const YellowToken = require("@/src/assets/images/piles/yellow_1024_transparent.png");
+const BlueToken = require("@/src/assets/images/piles/blue_1024_transparent.png");
+
 
 const getWinnerTokenImage = (index: number) => {
   if (index === 0) return RedToken;

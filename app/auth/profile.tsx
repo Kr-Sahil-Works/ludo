@@ -18,7 +18,7 @@ import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
 const { width } = Dimensions.get("window");
@@ -30,11 +30,17 @@ export default function ProfileScreen() {
 
   const upsertUser = useMutation(api.users.upsertUser);
 
+  // ✅ get real DB values from convex
+  const convexUser = useQuery(
+    api.users.getUser,
+    user?.id ? { clerkId: user.id } : "skip"
+  );
+
   const [username, setUsername] = useState("");
   const [savedUsername, setSavedUsername] = useState("");
 
-  const [coins, setCoins] = useState(12000);
-  const [gems, setGems] = useState(199);
+  const [coins, setCoins] = useState(0);
+  const [gems, setGems] = useState(0);
   const [level, setLevel] = useState(1);
 
   const [saving, setSaving] = useState(false);
@@ -46,63 +52,85 @@ export default function ProfileScreen() {
   // VIP glow pulse
   const glowPulse = useRef(new Animated.Value(0)).current;
 
-const dialogFade = useRef(new Animated.Value(0)).current;
-const dialogScale = useRef(new Animated.Value(0.85)).current;
-useEffect(() => {
-  Animated.loop(
-    Animated.sequence([
-      Animated.timing(glowPulse, {
-        toValue: 1,
-        duration: 1400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(glowPulse, {
-        toValue: 0,
-        duration: 1400,
-        useNativeDriver: true,
-      }),
-    ])
-  ).start();
-}, []);
+  const dialogFade = useRef(new Animated.Value(0)).current;
+  const dialogScale = useRef(new Animated.Value(0.85)).current;
 
-  
+  // VIP glow animation
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, {
+          toValue: 1,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowPulse, {
+          toValue: 0,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
   // shimmer slow loop
   useEffect(() => {
-  shimmer.setValue(-250);
+    shimmer.setValue(-250);
 
-  const loop = Animated.loop(
-    Animated.sequence([
-      Animated.timing(shimmer, {
-        toValue: width + 250,
-        duration: 5200,
-        useNativeDriver: true,
-      }),
-      Animated.delay(500),
-    ])
-  );
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, {
+          toValue: width + 250,
+          duration: 5200,
+          useNativeDriver: true,
+        }),
+        Animated.delay(500),
+      ])
+    );
 
-  loop.start();
+    loop.start();
 
-  return () => loop.stop();
-}, []);
+    return () => loop.stop();
+  }, []);
 
-
-  
-
-  // Load metadata from Clerk
+  // 🚀 Auto create user in Convex if missing
   useEffect(() => {
-    if (user) {
-      const meta: any = user.unsafeMetadata || {};
-      const existingUsername = meta.username || "";
+    const createUserIfNeeded = async () => {
+      if (!user) return;
 
-      setSavedUsername(existingUsername);
-      setUsername(existingUsername);
+      // convexUser will be undefined while loading
+      if (convexUser === undefined) return;
 
-      setCoins(meta.coins ?? 12000);
-      setGems(meta.gems ?? 199);
-      setLevel(meta.level ?? 1);
-    }
-  }, [user]);
+      // If user not in DB -> create
+      if (!convexUser) {
+        await upsertUser({
+          clerkId: user.id,
+          username: "",
+          name: user.fullName || "Player",
+          email: user.primaryEmailAddress?.emailAddress || "",
+          imageUrl: user.imageUrl || "",
+
+          coins: 12000,
+          gems: 199,
+          level: 1,
+        });
+      }
+    };
+
+    createUserIfNeeded();
+  }, [user, convexUser]);
+
+  // ✅ Load from Convex DB into UI state
+  useEffect(() => {
+    if (!convexUser) return;
+
+    setSavedUsername(convexUser.username || "");
+    setUsername(convexUser.username || "");
+
+    setCoins(convexUser.coins ?? 12000);
+    setGems(convexUser.gems ?? 199);
+    setLevel(convexUser.level ?? 1);
+  }, [convexUser]);
 
   if (!isLoaded) {
     return (
@@ -114,7 +142,17 @@ useEffect(() => {
   }
 
   if (!isSignedIn) {
-    return <Redirect href="../login" />;
+    return <Redirect href="/auth/login" />;
+  }
+
+  // Convex user still loading
+  if (convexUser === undefined) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="white" />
+        <Text style={styles.loadingText}>Fetching profile data...</Text>
+      </View>
+    );
   }
 
   const saveUsernameOnce = async () => {
@@ -143,25 +181,18 @@ useEffect(() => {
         return;
       }
 
-      // 1) Save to Clerk metadata
-      await user?.update({
-        unsafeMetadata: {
-          username: cleanUsername,
-          coins,
-          gems,
-          level,
-        },
-      });
-
-      // 2) Save to Convex DB
+      // ✅ Save to Convex DB (real values)
       await upsertUser({
-  clerkId: user!.id,
-  username: cleanUsername,
-  name: user?.fullName || "Player",
-  email: user?.primaryEmailAddress?.emailAddress || "",
-  imageUrl: user?.imageUrl || "",
-});
+        clerkId: user!.id,
+        username: cleanUsername,
+        name: user?.fullName || "Player",
+        email: user?.primaryEmailAddress?.emailAddress || "",
+        imageUrl: user?.imageUrl || "",
 
+        coins,
+        gems,
+        level,
+      });
 
       setSavedUsername(cleanUsername);
 
@@ -183,7 +214,10 @@ useEffect(() => {
     >
       {/* TOP HEADER */}
       <View style={styles.topRow}>
-        <Pressable style={styles.backBtn} onPress={() => router.replace("/")}>
+        <Pressable
+          style={styles.backBtn}
+          onPress={() => router.replace("/(tabs)")}
+        >
           <Text style={styles.backText}>← Home</Text>
         </Pressable>
 
@@ -191,28 +225,27 @@ useEffect(() => {
 
         <Pressable
           style={styles.logoutMiniBtn}
-         onPress={() => {
-  Vibration.vibrate(20);
-  setShowLogout(true);
+          onPress={() => {
+            Vibration.vibrate(20);
+            setShowLogout(true);
 
-  dialogFade.setValue(0);
-  dialogScale.setValue(0.85);
+            dialogFade.setValue(0);
+            dialogScale.setValue(0.85);
 
-  Animated.parallel([
-    Animated.timing(dialogFade, {
-      toValue: 1,
-      duration: 260,
-      useNativeDriver: true,
-    }),
-    Animated.spring(dialogScale, {
-      toValue: 1,
-      friction: 6,
-      tension: 60,
-      useNativeDriver: true,
-    }),
-  ]).start();
-}}
-
+            Animated.parallel([
+              Animated.timing(dialogFade, {
+                toValue: 1,
+                duration: 260,
+                useNativeDriver: true,
+              }),
+              Animated.spring(dialogScale, {
+                toValue: 1,
+                friction: 6,
+                tension: 60,
+                useNativeDriver: true,
+              }),
+            ]).start();
+          }}
         >
           <Text style={styles.logoutMiniText}>Logout</Text>
         </Pressable>
@@ -233,9 +266,7 @@ useEffect(() => {
             colors={["#ffe168", "#ffb300", "#ff8800"]}
             style={styles.crownBadge}
           >
-           <Text style={styles.crownIcon}>👑</Text>
-
-
+            <Text style={styles.crownIcon}>👑</Text>
             <Text style={styles.crownLevel}>{level}</Text>
           </LinearGradient>
         </View>
@@ -301,29 +332,28 @@ useEffect(() => {
         />
 
         {/* shimmer overlay */}
-      <Animated.View
-  pointerEvents="none"
-  style={[
-    styles.shimmerWrap,
-    {
-      transform: [{ translateX: shimmer }, { rotate: "20deg" }],
-    },
-  ]}
->
-  <LinearGradient
-    colors={[
-      "rgba(255,255,255,0)",
-      "rgba(255,255,255,0.18)",
-      "rgba(255,255,255,0.45)",
-      "rgba(255,255,255,0.18)",
-      "rgba(255,255,255,0)",
-    ]}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 0 }}
-    style={styles.shimmerGradient}
-  />
-</Animated.View>
-
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.shimmerWrap,
+            {
+              transform: [{ translateX: shimmer }, { rotate: "20deg" }],
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={[
+              "rgba(255,255,255,0)",
+              "rgba(255,255,255,0.18)",
+              "rgba(255,255,255,0.45)",
+              "rgba(255,255,255,0.18)",
+              "rgba(255,255,255,0)",
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.shimmerGradient}
+          />
+        </Animated.View>
 
         <View style={styles.premiumHeader}>
           <Text style={styles.premiumTitle}>PREMIUM PLAYER</Text>
@@ -371,30 +401,31 @@ useEffect(() => {
       </View>
 
       {/* BACK BUTTON */}
-      <Pressable style={styles.bigBtn} onPress={() => router.replace("/")}>
+      <Pressable
+        style={styles.bigBtn}
+        onPress={() => router.replace("/(tabs)")}
+      >
         <Text style={styles.bigBtnText}>Back to Home</Text>
       </Pressable>
 
       {/* LOGOUT DIALOG */}
-     {showLogout && (
-  <View style={styles.dialogOverlay}>
-    {/* DIM BACKGROUND */}
-    <View style={styles.dimBg} />
+      {showLogout && (
+        <View style={styles.dialogOverlay}>
+          {/* DIM BACKGROUND */}
+          <View style={styles.dimBg} />
 
-    {/* BLUR BACKGROUND */}
-    <BlurView intensity={90} tint="dark" style={styles.blurBg} />
+          {/* BLUR BACKGROUND */}
+          <BlurView intensity={90} tint="dark" style={styles.blurBg} />
 
-    <Animated.View
-  style={[
-    styles.dialogCard,
-    {
-      opacity: dialogFade,
-      transform: [{ scale: dialogScale }],
-    },
-  ]}
->
-
-
+          <Animated.View
+            style={[
+              styles.dialogCard,
+              {
+                opacity: dialogFade,
+                transform: [{ scale: dialogScale }],
+              },
+            ]}
+          >
             <Text style={styles.dialogTitle}>Logout?</Text>
             <Text style={styles.dialogText}>
               Are you sure you want to logout from your account?
@@ -416,8 +447,10 @@ useEffect(() => {
                 onPress={async () => {
                   Vibration.vibrate(60);
                   setShowLogout(false);
+
                   await signOut();
-                  router.replace("../login");
+
+                  router.replace("/auth/login");
                 }}
               >
                 <LinearGradient
@@ -428,7 +461,7 @@ useEffect(() => {
                 </LinearGradient>
               </Pressable>
             </View>
-         </Animated.View>
+          </Animated.View>
         </View>
       )}
     </LinearGradient>
@@ -635,20 +668,19 @@ const styles = StyleSheet.create({
   },
 
   shimmerWrap: {
-  position: "absolute",
-  top: -80,
-  left: -200,
-  width: 420, // 🔥 BIG so it never becomes small
-  height: 420,
-  borderRadius: 80,
-  overflow: "hidden",
-},
+    position: "absolute",
+    top: -80,
+    left: -200,
+    width: 420,
+    height: 420,
+    borderRadius: 80,
+    overflow: "hidden",
+  },
 
-shimmerGradient: {
-  width: "100%",
-  height: "100%",
-},
-
+  shimmerGradient: {
+    width: "100%",
+    height: "100%",
+  },
 
   premiumHeader: {
     flexDirection: "row",
@@ -748,7 +780,6 @@ shimmerGradient: {
     fontSize: 14,
   },
 
-  /* LOGOUT DIALOG */
   dialogOverlay: {
     position: "absolute",
     top: 0,
@@ -833,13 +864,13 @@ shimmerGradient: {
     fontSize: 13,
     letterSpacing: 1,
   },
-  dimBg: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0, 0, 0, 0.58)", // 🔥 dim effect
-},
 
+  dimBg: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.58)",
+  },
 });

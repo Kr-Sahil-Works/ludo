@@ -16,21 +16,21 @@ import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "@/src/redux/store";
 import { resetGame } from "@/src/redux/gameSlice";
 
-import ComingSoonModal from "@/app/Components&Modals/1home/ComingSoonModal";
+import ComingSoonModal from "@/app/pages_modals/1home/ComingSoonModal";
 import HomeLoader from "@/src/components/Loaders/HomeLoader";
 
-import { playBG, playFX, stopBG } from "../../src/utils/sound";
-import GameHeader from "@/app/Components&Modals/1home/GameHeader";
+import { playBG, playFX, stopBG } from "@/src/utils/sound";
+import GameHeader from "@/app/pages_modals/1home/GameHeader";
 
 import { setHomeLoading } from "@/src/redux/uiSlice";
-import SpinWheelModal from "@/app/Components&Modals/1home/SpinWheelModal";
-import SelectPersonTokenModal from "@/app/Components&Modals/2passNplay/SelectPersonTokenModal";
+import SpinWheelModal from "@/app/pages_modals/1home/SpinWheelModal";
+import SelectPersonTokenModal from "@/app/pages_modals/2passNplay/SelectPersonTokenModal";
 
 
-import ModeCard from "@/app/Components&Modals/1home/ModeCard";
+import ModeCard from "@/app/pages_modals/1home/ModeCard";
 
 import { useUser } from "@clerk/clerk-expo";
-import PassNPlayModal from "@/app/Components&Modals/2passNplay/PassNPlayModal";
+import PassNPlayModal from "@/app/pages_modals/2passNplay/PassNPlayModal";
 
 const Logo: any = require("@/src/assets/images/brightlogo.png");
 const HomeBG: any = require("@/src/assets/images/hf2.png");
@@ -394,13 +394,20 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
             />
 
             {/* 🔒 LOGIN REQUIRED */}
-            <ModeCard
-              title="Online"
-              subtitle="Coming soon"
-              icon={Friends}
-              color="#89dd0a"
-              onPress={openLockedMode}
-            />
+          <ModeCard
+  title="Online"
+  subtitle="Play with friends"
+  icon={Friends}
+  color="#89dd0a"
+  onPress={() => {
+    if (!isSignedIn) {
+      router.push("/auth/login");
+      return;
+    }
+    router.push("/pages_modals/online/OnlineRoomScreen");
+  }}
+/>
+
 
             {/* 🔒 LOGIN REQUIRED */}
             <ModeCard
@@ -454,8 +461,6 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
 )}
 <PassNPlayModal
   visible={showPassPlaySelect}
-  coins={2825}
-  gems={167}
   onClose={() => setShowPassPlaySelect(false)}
   onClassic={() => {
   setSelectedMode("classic");

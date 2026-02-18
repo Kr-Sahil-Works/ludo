@@ -31,7 +31,7 @@ import LudoBoard from "@/app/gameLogic/LudoBoard";
 import LottieView from "lottie-react-native";
 import FireworkAnim from "@/src/assets/animation/firework.json";
 
-import GamePauseModal from "@/app/Components&Modals/2passNplay/GamePauseModal";
+import GamePauseModal from "@/app/pages_modals/2passNplay/GamePauseModal";
 import { clearSavedGame, setGameConfig } from "@/src/redux/gameSlice";
 
 import {
@@ -42,15 +42,16 @@ import {
 } from "../../src/redux/selectors";
 
 import { useGameLogic } from "@/src/hooks/useP2PGameLogic";
-import WinnerCardModal from "@/app/Components&Modals/2passNplay/WinnerCardModal";
+import WinnerCardModal from "@/app/pages_modals/2passNplay/WinnerCardModal";
 
 const GameBG = require("@/src/assets/images/ludogmbg.png");
 const MenuIcon = require("@/src/assets/images/menu.png");
 
-const RedToken = require("@/src/assets/images/piles/red_1024.png");
-const GreenToken = require("@/src/assets/images/piles/green_1024.png");
-const YellowToken = require("@/src/assets/images/piles/yellow_1024.png");
-const BlueToken = require("@/src/assets/images/piles/blue_1024.png");
+const RedToken = require("@/src/assets/images/piles/red_1024_transparent.png");
+const GreenToken = require("@/src/assets/images/piles/green_1024_transparent.png");
+const YellowToken = require("@/src/assets/images/piles/yellow_1024_transparent.png");
+const BlueToken = require("@/src/assets/images/piles/blue_1024_transparent.png");
+
 
 const { width } = Dimensions.get("window");
 

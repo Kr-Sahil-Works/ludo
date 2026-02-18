@@ -16,10 +16,11 @@ const { width } = Dimensions.get("window");
 
 const BackIcon = require("@/src/assets/images/back.png");
 
-const RedToken = require("@/src/assets/images/piles/red_1024.png");
-const GreenToken = require("@/src/assets/images/piles/green_1024.png");
-const YellowToken = require("@/src/assets/images/piles/yellow_1024.png");
-const BlueToken = require("@/src/assets/images/piles/blue_1024.png");
+const RedToken = require("@/src/assets/images/piles/red_1024_transparent.png");
+const GreenToken = require("@/src/assets/images/piles/green_1024_transparent.png");
+const YellowToken = require("@/src/assets/images/piles/yellow_1024_transparent.png");
+const BlueToken = require("@/src/assets/images/piles/blue_1024_transparent.png");
+
 
 type Props = {
   visible: boolean;

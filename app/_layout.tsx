@@ -1,8 +1,8 @@
-import * as WebBrowser from "expo-web-browser";
-WebBrowser.maybeCompleteAuthSession();
-
 import React from "react";
 import { Stack } from "expo-router";
+
+import * as WebBrowser from "expo-web-browser";
+WebBrowser.maybeCompleteAuthSession();
 
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
@@ -21,14 +21,26 @@ const tokenCache = {
   async getToken(key: string) {
     try {
       return await SecureStore.getItemAsync(key);
-    } catch {
+    } catch (err) {
+      console.log("SecureStore getToken error:", err);
       return null;
     }
   },
+
   async saveToken(key: string, value: string) {
     try {
       await SecureStore.setItemAsync(key, value);
-    } catch {}
+    } catch (err) {
+      console.log("SecureStore saveToken error:", err);
+    }
+  },
+
+  async clearToken(key: string) {
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch (err) {
+      console.log("SecureStore clearToken error:", err);
+    }
   },
 };
 

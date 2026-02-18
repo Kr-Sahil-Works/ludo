@@ -14,10 +14,11 @@ import TileImpactPulse from "@/app/gameLogic/TileImpactPulse";
 const BoardImg = require("@/src/assets/images/boardsquare_2040.png");
 const PADDING = 6;
 
-const RedToken = require("@/src/assets/images/piles/red_1024.png");
-const GreenToken = require("@/src/assets/images/piles/green_1024.png");
-const YellowToken = require("@/src/assets/images/piles/yellow_1024.png");
-const BlueToken = require("@/src/assets/images/piles/blue_1024.png");
+const RedToken = require("@/src/assets/images/piles/red_1024_transparent.png");
+const GreenToken = require("@/src/assets/images/piles/green_1024_transparent.png");
+const YellowToken = require("@/src/assets/images/piles/yellow_1024_transparent.png");
+const BlueToken = require("@/src/assets/images/piles/blue_1024_transparent.png");
+
 
 type Player = {
   name: string;
