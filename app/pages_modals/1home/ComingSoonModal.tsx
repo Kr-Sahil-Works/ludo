@@ -10,11 +10,17 @@ import {
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 
+type ComingSoonModalProps = {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+};
+
 export default function ComingSoonModal({
   visible,
   onClose,
   title = "Coming Soon 🚀",
-}) {
+}: ComingSoonModalProps) {
   const scaleAnim = useRef(new Animated.Value(0.6)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const translateYAnim = useRef(new Animated.Value(60)).current;
@@ -23,7 +29,7 @@ export default function ComingSoonModal({
   const shineAnim = useRef(new Animated.Value(-400)).current;
 
   useEffect(() => {
-    let shineLoop;
+    let shineLoop: Animated.CompositeAnimation | undefined;
 
     if (visible) {
       Animated.parallel([
@@ -69,7 +75,7 @@ export default function ComingSoonModal({
     return () => {
       shineLoop?.stop();
     };
-  }, [visible]);
+  }, [visible, opacityAnim, scaleAnim, translateYAnim, shineAnim]);
 
   return (
     <Modal transparent visible={visible} animationType="fade">

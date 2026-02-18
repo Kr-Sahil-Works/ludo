@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as gameLogic_boardPositions from "../gameLogic/boardPositions.js";
+import type * as gameLogic_moveLogic from "../gameLogic/moveLogic.js";
+import type * as gameLogic_plotData from "../gameLogic/plotData.js";
 import type * as rooms from "../rooms.js";
 import type * as users from "../users.js";
 
@@ -18,6 +21,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "gameLogic/boardPositions": typeof gameLogic_boardPositions;
+  "gameLogic/moveLogic": typeof gameLogic_moveLogic;
+  "gameLogic/plotData": typeof gameLogic_plotData;
   rooms: typeof rooms;
   users: typeof users;
 }>;

@@ -25,12 +25,14 @@ import GameHeader from "@/app/pages_modals/1home/GameHeader";
 import { setHomeLoading } from "@/src/redux/uiSlice";
 import SpinWheelModal from "@/app/pages_modals/1home/SpinWheelModal";
 import SelectPersonTokenModal from "@/app/pages_modals/2passNplay/SelectPersonTokenModal";
-
+import OfflineHeader from "@/app/pages_modals/1home/OfflineHeader";
 
 import ModeCard from "@/app/pages_modals/1home/ModeCard";
 
 import { useUser } from "@clerk/clerk-expo";
 import PassNPlayModal from "@/app/pages_modals/2passNplay/PassNPlayModal";
+
+import OfflineToast from "@/app/pages_modals/1home/OfflineToast";
 
 const Logo: any = require("@/src/assets/images/brightlogo.png");
 const HomeBG: any = require("@/src/assets/images/hf2.png");
@@ -50,14 +52,23 @@ export default function HomeScreen() {
   const [showSpin, setShowSpin] = useState(false);
   const [showPassPlaySelect, setShowPassPlaySelect] = useState(false);
 
-const [showSelectModal, setShowSelectModal] = useState(false);
-const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic");
+  const [showSelectModal, setShowSelectModal] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<"classic" | "quick">(
+    "classic"
+  );
 
+  const [showComingSoon, setShowComingSoon] = useState(false);
+
+  // ✅ OFFLINE TOAST
+  const [showOfflineToast, setShowOfflineToast] = useState(false);
+
+  const onlineReady = useSelector((state: RootState) => state.app.onlineReady);
+  const isConnected = useSelector((state: RootState) => state.app.isConnected);
 
   const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
 
-  const { isSignedIn } = useUser(); // ✅ LOGIN CHECK
+  const { isSignedIn } = useUser();
 
   useEffect(() => {
     dispatch(setHomeLoading(true));
@@ -72,11 +83,7 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
 
   const players = useSelector((state: RootState) => state.game.players);
 
-  const hasGameStarted = players.some((p) =>
-    p.tokens.some((pos) => pos !== 0)
-  );
-
-  const [showComingSoon, setShowComingSoon] = useState(false);
+  const hasGameStarted = players.some((p) => p.tokens.some((pos) => pos !== 0));
 
   const witchAnim = useRef(new Animated.Value(-500)).current;
   const scaleXAnim = useRef(new Animated.Value(-1)).current;
@@ -87,6 +94,13 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
   const isFocused = useIsFocused();
 
   const spinBounce = useRef(new Animated.Value(1)).current;
+  const headerFade = useRef(new Animated.Value(0)).current;
+
+
+  const showOfflineDialog = () => {
+    setShowOfflineToast(true);
+    setTimeout(() => setShowOfflineToast(false), 2200);
+  };
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -218,6 +232,14 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
     return () => animation.stop();
   }, []);
 
+  useEffect(() => {
+  Animated.timing(headerFade, {
+    toValue: onlineReady ? 1 : 0,
+    duration: 350,
+    useNativeDriver: true,
+  }).start();
+}, [onlineReady]);
+
   // HOME MUSIC
   useEffect(() => {
     if (!loading && isFocused) {
@@ -238,38 +260,81 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
     router.push("/gameScreens/PassNPlayGame");
   };
 
-  const handleNewGamePress = useCallback(() => {
-    startGame(true);
-  }, []);
-
   const handleResumePress = useCallback(() => {
     startGame(false);
   }, []);
 
-  // 🔒 Login required only for Online + Snake Ladder
-  const openLockedMode = () => {
+  const openSnakeLadder = () => {
     if (!isSignedIn) {
       router.push("/auth/login");
+      return;
+    }
+
+    if (!isConnected) {
+      showOfflineDialog();
       return;
     }
 
     setShowComingSoon(true);
   };
 
+  const openOnlineMode = () => {
+    if (!isSignedIn) {
+      router.push("/auth/login");
+      return;
+    }
+
+    if (!isConnected) {
+      showOfflineDialog();
+      return;
+    }
+
+    router.push("/pages_modals/online/OnlineRoomScreen");
+  };
+
   return loading ? (
     <HomeLoader />
   ) : (
     <View style={{ flex: 1 }}>
-      <GameHeader
-        coins={1970}
-        gems={150}
-        level={1}
-        onPressProfile={() => console.log("Profile")}
-        onPressCoins={() => console.log("Buy Coins")}
-        onPressGems={() => console.log("Buy Gems")}
-        onPressStore={() => console.log("Store")}
-        onPressSettings={() => console.log("Settings")}
-      />
+      {/* HEADER */}
+<View
+  pointerEvents="box-none"
+  style={{
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+  }}
+>
+  <Animated.View
+    pointerEvents={onlineReady ? "auto" : "none"}
+    style={{
+      opacity: onlineReady ? 1 : 0,
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+    }}
+  >
+    <GameHeader />
+  </Animated.View>
+
+  <Animated.View
+    pointerEvents={onlineReady ? "none" : "auto"}
+    style={{
+      opacity: onlineReady ? 0 : 1,
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+    }}
+  >
+    <OfflineHeader />
+  </Animated.View>
+</View>
+
+
 
       {/* WHOLE SCREEN */}
       <View style={{ flex: 1 }}>
@@ -299,26 +364,25 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
         {/* UI DOES NOT SCALE */}
         <View style={{ flex: 1 }}>
           {/* SPIN BUTTON LEFT */}
-{isSignedIn && (
-  <Pressable
-    style={styles.spinBtn}
-    onPress={() => {
-      playFX("ui");
-      setShowSpin(true);
-    }}
-  >
-    <Animated.Image
-      source={SpinBtn}
-      style={[
-        styles.spinImg,
-        {
-          transform: [{ scale: spinBounce }],
-        },
-      ]}
-    />
-  </Pressable>
-)}
-
+          {onlineReady && (
+            <Pressable
+              style={styles.spinBtn}
+              onPress={() => {
+                playFX("ui");
+                setShowSpin(true);
+              }}
+            >
+              <Animated.Image
+                source={SpinBtn}
+                style={[
+                  styles.spinImg,
+                  {
+                    transform: [{ scale: spinBounce }],
+                  },
+                ]}
+              />
+            </Pressable>
+          )}
 
           {/* LOGO */}
           <View style={styles.imgContainer}>
@@ -362,29 +426,28 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
 
           {/* BUTTON GRID */}
           <View style={styles.modeGrid}>
-         {/* ✅ RESUME OR PASS N PLAY (ONLY ONE) */}
-  {hasGameStarted ? (
-    <ModeCard
-      title="Resume"
-      subtitle="Continue game"
-      icon={Earth}
-      color="#00eaff"
-      onPress={handleResumePress}
-    />
-  ) : (
-    <ModeCard
-      title="Pass N Play"
-      subtitle="Local match"
-      icon={Pass}
-      color="#ff3b30"
-      onPress={() => {
-        setShowPassPlaySelect(true);
-      }}
-    />
-  )}
+            {/* RESUME OR PASS N PLAY */}
+            {hasGameStarted ? (
+              <ModeCard
+                title="Resume"
+                subtitle="Continue game"
+                icon={Earth}
+                color="#00eaff"
+                onPress={handleResumePress}
+              />
+            ) : (
+              <ModeCard
+                title="Pass N Play"
+                subtitle="Local match"
+                icon={Pass}
+                color="#ff3b30"
+                onPress={() => {
+                  setShowPassPlaySelect(true);
+                }}
+              />
+            )}
 
-
-            {/* ✅ WORKS WITHOUT LOGIN */}
+            {/* COMPUTER */}
             <ModeCard
               title="Computer"
               subtitle="Coming soon"
@@ -393,29 +456,22 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
               onPress={() => setShowComingSoon(true)}
             />
 
-            {/* 🔒 LOGIN REQUIRED */}
-          <ModeCard
-  title="Online"
-  subtitle="Play with friends"
-  icon={Friends}
-  color="#89dd0a"
-  onPress={() => {
-    if (!isSignedIn) {
-      router.push("/auth/login");
-      return;
-    }
-    router.push("/pages_modals/online/OnlineRoomScreen");
-  }}
-/>
+            {/* ONLINE */}
+            <ModeCard
+              title="Online"
+              subtitle="Play with friends"
+              icon={Friends}
+              color="#89dd0a"
+              onPress={openOnlineMode}
+            />
 
-
-            {/* 🔒 LOGIN REQUIRED */}
+            {/* SNAKE */}
             <ModeCard
               title="Snake Ladder"
               subtitle="Coming soon"
               icon={Snake}
               color="#ff7b00"
-              onPress={openLockedMode}
+              onPress={openSnakeLadder}
             />
           </View>
 
@@ -444,61 +500,66 @@ const [selectedMode, setSelectedMode] = useState<"classic" | "quick">("classic")
             </Pressable>
           </Animated.View>
 
+          {/* COMING SOON */}
           <ComingSoonModal
             visible={showComingSoon}
             onClose={() => setShowComingSoon(false)}
           />
 
-         {isSignedIn && (
-  <SpinWheelModal
-    visible={showSpin}
-    onClose={() => setShowSpin(false)}
-    onReward={(coins) => {
-      console.log("SPIN REWARD:", coins);
-      setShowSpin(false);
-    }}
-  />
-)}
-<PassNPlayModal
-  visible={showPassPlaySelect}
-  onClose={() => setShowPassPlaySelect(false)}
-  onClassic={() => {
-  setSelectedMode("classic");
-  setShowPassPlaySelect(false);
-  setShowSelectModal(true);
-}}
+          {/* SPIN */}
+          {onlineReady && (
+            <SpinWheelModal
+              visible={showSpin}
+              onClose={() => setShowSpin(false)}
+              onReward={(coins) => {
+                console.log("SPIN REWARD:", coins);
+                setShowSpin(false);
+              }}
+            />
+          )}
 
-  onQuick={() => {
-  setSelectedMode("quick");
-  setShowPassPlaySelect(false);
-  setShowSelectModal(true);
-}}
+          {/* PASS N PLAY SELECT */}
+          <PassNPlayModal
+            visible={showPassPlaySelect}
+            onClose={() => setShowPassPlaySelect(false)}
+            onClassic={() => {
+              setSelectedMode("classic");
+              setShowPassPlaySelect(false);
+              setShowSelectModal(true);
+            }}
+            onQuick={() => {
+              setSelectedMode("quick");
+              setShowPassPlaySelect(false);
+              setShowSelectModal(true);
+            }}
+          />
 
-/>
+          {/* PASS N PLAY TOKEN SELECT */}
+          <SelectPersonTokenModal
+            visible={showSelectModal}
+            mode={selectedMode}
+            onClose={() => setShowSelectModal(false)}
+            onPlay={(players, colors) => {
+              setShowSelectModal(false);
 
-<SelectPersonTokenModal
-  visible={showSelectModal}
-  mode={selectedMode}
-  onClose={() => setShowSelectModal(false)}
-  onPlay={(players, colors) => {
-    setShowSelectModal(false);
-
-    router.push({
-      pathname: "/gameScreens/PassNPlayGame",
-      params: {
-        players: String(players),
-        colors: colors.join(","),
-      },
-    });
-  }}
-/>
-
-
+              router.push({
+                pathname: "/gameScreens/PassNPlayGame",
+                params: {
+                  players: String(players),
+                  colors: colors.join(","),
+                },
+              });
+            }}
+          />
         </View>
+
+        {/* OFFLINE TOAST */}
+        <OfflineToast visible={showOfflineToast} />
       </View>
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   imgContainer: {

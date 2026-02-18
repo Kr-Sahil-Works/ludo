@@ -11,12 +11,16 @@ import {
   Image,
   Vibration,
   useWindowDimensions,
+  ActivityIndicator,
 } from "react-native";
 
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { playFX } from "@/src/utils/sound";
+
+import { useUser } from "@clerk/clerk-expo";
 
 const BackIcon = require("@/src/assets/images/back.png");
 
@@ -40,6 +44,8 @@ export default function OnlineRoomScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
+  const { user, isLoaded } = useUser();
+
   // scale helper
   const s = (val: number) => {
     const base = 390;
@@ -59,13 +65,16 @@ export default function OnlineRoomScreen() {
 
   const joinRoom = useMutation(api.rooms.joinRoom);
 
-  const userId = "user123"; // later Clerk user.id
-  const userName = "Player";
-
+  // animations
   const glowAnim = useRef(new Animated.Value(0)).current;
   const coinScale = useRef(new Animated.Value(1)).current;
   const coinFade = useRef(new Animated.Value(1)).current;
   const shineAnim = useRef(new Animated.Value(-200)).current;
+
+  // toast + shake
+  const [errorToast, setErrorToast] = useState("");
+  const toastAnim = useRef(new Animated.Value(-120)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   const styles = useMemo(() => {
     const panelWidth = Math.min(width * 0.9, isTablet ? 520 : 420);
@@ -272,26 +281,28 @@ export default function OnlineRoomScreen() {
 
       amountBox: {
         backgroundColor: "#1d1710ac",
-        paddingHorizontal: s(16),
-        paddingVertical: s(6),
+        paddingHorizontal: s(6),
+        paddingVertical: s(4),
         borderRadius: s(14),
-        borderWidth: s(2),
+        borderWidth: s(1),
         borderColor: "rgba(255,255,255,0.25)",
         marginLeft: s(10),
-        minWidth: s(90),
+        minWidth: s(70),
         alignItems: "center",
       },
 
       amountBoxBig: {
-        paddingHorizontal: s(14),
-        paddingVertical: s(6),
+        paddingHorizontal: s(5),
+        paddingVertical: s(2),
         borderRadius: s(18),
-        borderWidth: s(2),
-        minWidth: s(120),
+        borderWidth: s(1),
+        minWidth: s(60),
+        alignItems: "center",
+        marginLeft: s(-10),
       },
 
       coinValueNormal: {
-        fontSize: s(28),
+        fontSize: s(26),
       },
 
       coinValueHigh: {
@@ -455,24 +466,93 @@ export default function OnlineRoomScreen() {
     });
   };
 
+  const showTopToast = (msg: string) => {
+    setErrorToast(msg);
+
+    toastAnim.setValue(-120);
+
+    Animated.timing(toastAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+
+    setTimeout(() => {
+      Animated.timing(toastAnim, {
+        toValue: -120,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => {
+        setErrorToast("");
+      });
+    }, 2000);
+  };
+
+  const shakeInput = () => {
+    shakeAnim.setValue(0);
+
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  };
+
   const handleJoin = async () => {
     try {
-      if (!code.trim()) return;
+      if (!user?.id) {
+        showTopToast("LOGIN REQUIRED!");
+        return;
+      }
+
+      const trimmed = code.trim().toUpperCase();
+
+      if (!trimmed) {
+        showTopToast("ENTER ROOM CODE!");
+        shakeInput();
+        return;
+      }
+
+      if (trimmed.length < 6) {
+        showTopToast("MIN 6 DIGIT CODE REQUIRED!");
+        shakeInput();
+        return;
+      }
 
       setLoading(true);
 
+      const userId = user.id;
+      const userName =
+        user.fullName || user.username || user.primaryEmailAddress?.emailAddress || "Player";
+
       await joinRoom({
-        code: code.trim().toUpperCase(),
+        code: trimmed,
         userId,
         name: userName,
       });
 
       router.push({
         pathname: "/pages_modals/online/room/[code]",
-        params: { code: code.trim().toUpperCase() },
+        params: { code: trimmed },
       });
     } catch (err: any) {
       console.log("JOIN ROOM ERROR:", err?.message);
+
+      const msg = String(err?.message || "");
+
+      shakeInput();
+
+      if (msg.toLowerCase().includes("room not found")) {
+        showTopToast("NO SUCH ROOM EXISTS!");
+      } else if (msg.toLowerCase().includes("expired")) {
+        showTopToast("ROOM EXPIRED!");
+      } else if (msg.toLowerCase().includes("full")) {
+        showTopToast("ROOM IS FULL!");
+      } else {
+        showTopToast("JOIN FAILED!");
+      }
     } finally {
       setLoading(false);
     }
@@ -487,6 +567,18 @@ export default function OnlineRoomScreen() {
     });
   };
 
+  // wait for clerk load
+  if (!isLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0a0a0a", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#ffd24a" />
+        <Text style={{ marginTop: 10, color: "#fff", fontWeight: "900" }}>
+          Loading user...
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -494,6 +586,37 @@ export default function OnlineRoomScreen() {
     >
       <View style={styles.container}>
         <View style={styles.overlay} />
+
+        {/* TOP ERROR TOAST */}
+        {errorToast ? (
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: s(70),
+              alignSelf: "center",
+              backgroundColor: "#000",
+              borderWidth: s(3),
+              borderColor: "#ffd24a",
+              paddingHorizontal: s(22),
+              paddingVertical: s(12),
+              borderRadius: s(18),
+              zIndex: 9999,
+              transform: [{ translateY: toastAnim }],
+            }}
+          >
+            <Text
+              style={{
+                fontSize: s(14),
+                fontWeight: "900",
+                color: "#ffd24a",
+                textTransform: "uppercase",
+                textAlign: "center",
+              }}
+            >
+              {errorToast}
+            </Text>
+          </Animated.View>
+        ) : null}
 
         {/* BACK BUTTON */}
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
@@ -557,7 +680,14 @@ export default function OnlineRoomScreen() {
               <>
                 <Text style={styles.title}>ENTER PRIVATE CODE</Text>
 
-                <View style={styles.inputBox}>
+                <Animated.View
+                  style={[
+                    styles.inputBox,
+                    {
+                      transform: [{ translateX: shakeAnim }],
+                    },
+                  ]}
+                >
                   <TextInput
                     placeholder="Enter private code here..."
                     placeholderTextColor="#bdbdbd"
@@ -569,7 +699,7 @@ export default function OnlineRoomScreen() {
                     inputMode="numeric"
                     returnKeyType="done"
                   />
-                </View>
+                </Animated.View>
 
                 <Pressable
                   style={[styles.mainBtn, loading && { opacity: 0.6 }]}
@@ -603,7 +733,7 @@ export default function OnlineRoomScreen() {
                     ]}
                   >
                     <LinearGradient
-                      colors={["#ffaa00", "#b3aa00", "#9f7618"]}
+                      colors={["#a43d01", "#181814", "#782704"]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 0, y: 1 }}
                       style={styles.entryCardInner}
@@ -696,7 +826,13 @@ export default function OnlineRoomScreen() {
                     </View>
                   </View>
 
-                  <Pressable style={styles.circleBtn} onPress={handlePlus}>
+                  <Pressable
+                    style={styles.circleBtn}
+                    onPress={() => {
+                      playFX("coins_sound");
+                      handlePlus();
+                    }}
+                  >
                     <Text style={styles.circleText}>+</Text>
                   </Pressable>
                 </View>

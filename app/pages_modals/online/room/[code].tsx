@@ -9,13 +9,14 @@ import {
   Share,
   Alert,
   useWindowDimensions,
-  Animated,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import * as Clipboard from "expo-clipboard";
 import { Linking } from "react-native";
+
+import { useUser } from "@clerk/clerk-expo";
 
 const InstagramIcon = require("@/src/assets/images/header/instagram.png");
 const BackIcon = require("@/src/assets/images/back.png");
@@ -26,6 +27,8 @@ export default function RoomLobby() {
   const router = useRouter();
   const { code } = useLocalSearchParams<{ code?: string }>();
 
+  const { user, isLoaded } = useUser();
+
   const [showCopied, setShowCopied] = useState(false);
   const [joinToast, setJoinToast] = useState("");
   const prevCountRef = useRef(0);
@@ -33,7 +36,16 @@ export default function RoomLobby() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
-  const userId = "user123"; // later Clerk user.id
+  const roomCode = String(code || "").toUpperCase();
+
+  const userId = user?.id || "";
+
+  const data = useQuery(
+    api.rooms.getRoom,
+    roomCode ? { code: roomCode } : "skip"
+  );
+
+  const startGame = useMutation(api.rooms.startGame);
 
   const s = (val: number) => {
     const base = 390;
@@ -59,7 +71,7 @@ export default function RoomLobby() {
 
       toastBox: {
         position: "absolute",
-        bottom: s(110),
+        top: s(120),
         paddingHorizontal: s(22),
         paddingVertical: s(12),
         borderRadius: s(18),
@@ -347,34 +359,56 @@ export default function RoomLobby() {
     });
   }, [width]);
 
-  const roomCode = String(code || "").toUpperCase();
+  // ✅ AUTO REDIRECT WHEN GAME STARTS
+  useEffect(() => {
+    if (data?.room?.status === "playing") {
+      router.replace(`/pages_modals/online/game/${data.room.code}` as any);
+    }
+  }, [data?.room?.status]);
 
-  const data = useQuery(
-    api.rooms.getRoom,
-    roomCode ? { code: roomCode } : "skip"
-  );
-
-  const startGame = useMutation(api.rooms.startGame);
-
+  // ✅ PLAYER JOIN TOAST
   useEffect(() => {
     if (!data?.players) return;
+    if (!userId) return;
 
-    const currentCount = data.players.length;
+    const sorted = [...data.players].sort(
+      (a: any, b: any) => a.joinedAt - b.joinedAt
+    );
+
+    const currentCount = sorted.length;
 
     if (prevCountRef.current !== 0 && currentCount > prevCountRef.current) {
-      const lastPlayer = data.players[currentCount - 1];
+      const lastPlayer = sorted[currentCount - 1];
 
       if (lastPlayer?.userId !== userId) {
         setJoinToast(`${lastPlayer.name} JOINED!`);
 
         setTimeout(() => {
           setJoinToast("");
-        }, 3000);
+        }, 2000);
       }
     }
 
     prevCountRef.current = currentCount;
-  }, [data?.players]);
+  }, [data?.players, userId]);
+
+  // ✅ WAIT FOR CLERK
+  if (!isLoaded) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#ffd24a" />
+        <Text style={styles.loadingText}>Loading user...</Text>
+      </View>
+    );
+  }
+
+  if (!userId) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>Login required</Text>
+      </View>
+    );
+  }
 
   if (data === undefined) {
     return (
@@ -448,6 +482,14 @@ export default function RoomLobby() {
     Linking.openURL("https://www.instagram.com/");
   };
 
+  const showWaitingToast = () => {
+    setJoinToast("PLAYER SLOT IS EMPTY!");
+
+    setTimeout(() => {
+      setJoinToast("");
+    }, 2200);
+  };
+
   const handleStart = async () => {
     try {
       await startGame({ code: roomCode, userId });
@@ -457,11 +499,19 @@ export default function RoomLobby() {
   };
 
   const isHost = room.hostId === userId;
-  const totalJoined = players.length;
 
-  const canStart = totalJoined >= 2; // ✅ minimum 2 players required
+  const sortedPlayers = [...players].sort(
+    (a: any, b: any) => a.joinedAt - b.joinedAt
+  );
 
-  const slots = [0, 1, 2].map((i) => players[i + 1]);
+  const totalSlots = room.playersCount || room.maxPlayers;
+  const canStart = sortedPlayers.length >= totalSlots;
+
+  const hostPlayer = sortedPlayers[0];
+
+  const slots = Array.from({ length: totalSlots - 1 }).map(
+    (_, i) => sortedPlayers[i + 1] || null
+  );
 
   const findUser = (uid: string) => {
     return playerUsers?.find((u: any) => u.userId === uid);
@@ -528,9 +578,7 @@ export default function RoomLobby() {
         </View>
 
         <Text style={styles.hostName}>
-          {hostUser?.name ||
-            players.find((p: any) => p.userId === room.hostId)?.name ||
-            "HOST"}
+          {hostUser?.name || hostPlayer?.name || "HOST"}
         </Text>
       </View>
 
@@ -572,8 +620,13 @@ export default function RoomLobby() {
       {isHost && room.status === "waiting" && (
         <Pressable
           style={[styles.startBtn, !canStart && styles.startBtnDisabled]}
-          onPress={handleStart}
-          disabled={!canStart}
+          onPress={() => {
+            if (!canStart) {
+              showWaitingToast();
+              return;
+            }
+            handleStart();
+          }}
         >
           <Text style={styles.startText}>
             {canStart ? "START GAME" : "WAITING FOR PLAYERS"}

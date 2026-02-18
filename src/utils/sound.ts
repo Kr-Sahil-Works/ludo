@@ -19,11 +19,17 @@ const soundFiles: Record<string, any> = {
   dice_roll: require("../assets/sounds/dice_roll.mp3"),
   ui: require("../assets/sounds/ui.mp3"),
 
+  coins_pour: require("../assets/sounds/Coins_Pour.mp3"),
+  coins_sound: require("../assets/sounds/Coins_sound.mp3"),
+  luckywheelspin: require("../assets/sounds/Luckywheelspin.mp3"),
+  pop: require("../assets/sounds/Pop.mp3"),
+
   pileMove: require("../assets/sounds/pile_move.mp3"),
   collide: require("../assets/sounds/punch.mp3"),
   safespot: require("../assets/sounds/safe_spot.mp3"),
   homepass: require("../assets/sounds/homepass.mp3"),
 };
+
 
 // ✅ ENABLE/DISABLE FUNCTIONS
 export function setFXEnabled(value: boolean) {

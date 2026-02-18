@@ -14,6 +14,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
+import { useUser } from "@clerk/clerk-expo";
+
 const BackIcon = require("@/src/assets/images/back.png");
 
 // tokens
@@ -21,7 +23,6 @@ const RedToken = require("@/src/assets/images/piles/red_1024_transparent.png");
 const GreenToken = require("@/src/assets/images/piles/green_1024_transparent.png");
 const YellowToken = require("@/src/assets/images/piles/yellow_1024_transparent.png");
 const BlueToken = require("@/src/assets/images/piles/blue_1024_transparent.png");
-
 
 const TOKEN_LIST = [
   { id: "red", img: RedToken },
@@ -35,26 +36,26 @@ export default function SelectMode() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
+  const { user, isLoaded } = useUser();
+
   const { entryCoins } = useLocalSearchParams<{ entryCoins?: string }>();
   const entry = Number(entryCoins || 100);
 
   const createRoom = useMutation(api.rooms.createRoom);
 
-  const userId = "user123"; // later Clerk user.id
-  const userName = "Player";
-
   const [mode, setMode] = useState<"classic" | "quick">("classic");
   const [playersCount, setPlayersCount] = useState<2 | 3 | 4>(4);
   const [loading, setLoading] = useState(false);
+
   const [toastMsg, setToastMsg] = useState("");
-const showToast = (msg: string) => {
-  setToastMsg(msg);
 
-  setTimeout(() => {
-    setToastMsg("");
-  }, 4000);
-};
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
 
+    setTimeout(() => {
+      setToastMsg("");
+    }, 2400);
+  };
 
   // token selection state
   const [selectedTokens, setSelectedTokens] = useState<string[]>([
@@ -77,18 +78,17 @@ const showToast = (msg: string) => {
   // auto defaults when players change
   useEffect(() => {
     if (playersCount === 2) {
-      setSelectedTokens(["red", "yellow"]); // default pair
+      setSelectedTokens(["red", "yellow"]);
     }
 
     if (playersCount === 3) {
-      setSelectedTokens(["red", "green", "yellow"]); // default 3
+      setSelectedTokens(["red", "green", "yellow"]);
     }
 
     if (playersCount === 4) {
       setSelectedTokens(["red", "green", "yellow", "blue"]);
     }
 
-    // glow effect trigger
     glowAnim.setValue(0);
     Animated.sequence([
       Animated.timing(glowAnim, {
@@ -248,63 +248,49 @@ const showToast = (msg: string) => {
         paddingHorizontal: s(16),
       },
 
-  tokenBox: {
-  width: s(70),
-  height: s(70),
-  borderRadius: s(18),
-  justifyContent: "center",
-  alignItems: "center",
-  borderWidth: s(2),
-  borderColor: "rgba(255,255,255,0.2)",
+      tokenBox: {
+        width: s(70),
+        height: s(70),
+        borderRadius: s(18),
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: s(2),
+        borderColor: "rgba(255,255,255,0.2)",
+        backgroundColor: "transparent",
+        overflow: "visible",
+      },
 
-  backgroundColor: "transparent", // ✅ IMPORTANT FIX
-  overflow: "visible", // ✅ IMPORTANT FIX (glow needs visible)
-},
+      tokenBoxActive: {
+        borderColor: "#00ffff",
+        backgroundColor: "rgba(0,255,255,0.12)",
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
+        transform: [{ scale: 1.06 }],
+      },
 
+      tokenBoxInactive: {
+        borderColor: "rgba(255,255,255,0.18)",
+        backgroundColor: "transparent",
+        opacity: 0.45,
+      },
 
-tokenBoxActive: {
-  borderColor: "#00ffff",
-  backgroundColor: "rgba(0,255,255,0.12)",
+      tokenImg: {
+        width: "85%",
+        height: "85%",
+        resizeMode: "contain",
+        backgroundColor: "transparent",
+      },
 
-  // ❌ REMOVE shadow (causes square)
-  shadowColor: undefined,
-  shadowOpacity: 0,
-  shadowRadius: 0,
-
-  // ❌ REMOVE elevation (main reason)
-  elevation: 0,
-
-  transform: [{ scale: 1.06 }],
-},
-
-
-
-
-tokenBoxInactive: {
-  borderColor: "rgba(255,255,255,0.18)",
-  backgroundColor: "transparent", // ✅ IMPORTANT
-  opacity: 0.45,
-},
-
-
-
-tokenImg: {
-  width: "85%",
-  height: "85%",
-  resizeMode: "contain",
-  backgroundColor: "transparent", // ✅ IMPORTANT
-},
-
-glowRing: {
-  position: "absolute",
-  width: "100%",
-  height: "100%",
-  borderRadius: 18,
-  borderWidth: 0,
-  borderColor: "#00ffff",
-  backgroundColor: "rgba(0,255,255,0.15)",
-},
-
+      glowRing: {
+        position: "absolute",
+        width: "100%",
+        height: "100%",
+        borderRadius: 18,
+        borderWidth: 0,
+        borderColor: "#00ffff",
+        backgroundColor: "rgba(0,255,255,0.15)",
+      },
 
       note: {
         marginTop: s(10),
@@ -348,39 +334,36 @@ glowRing: {
         textShadowColor: "#000",
         textShadowRadius: 6,
       },
-      
+
       toastBox: {
-  position: "absolute",
-  bottom: s(110),
-  paddingHorizontal: s(18),
-  paddingVertical: s(10),
-  borderRadius: s(16),
-  backgroundColor: "#000",
-  borderWidth: s(2),
-  borderColor: "#ffd24a",
-  shadowColor: "#ffd24a",
-  shadowOpacity: 0.9,
-  shadowRadius: s(10),
-  elevation: 20,
-},
+        position: "absolute",
+        bottom: s(110),
+        paddingHorizontal: s(18),
+        paddingVertical: s(10),
+        borderRadius: s(16),
+        backgroundColor: "#000",
+        borderWidth: s(2),
+        borderColor: "#ffd24a",
+        shadowColor: "#ffd24a",
+        shadowOpacity: 0.9,
+        shadowRadius: s(10),
+        elevation: 20,
+      },
 
-toastText: {
-  fontSize: s(13),
-  fontWeight: "900",
-  color: "#ffd24a",
-  textAlign: "center",
-  textTransform: "uppercase",
-},
-
+      toastText: {
+        fontSize: s(13),
+        fontWeight: "900",
+        color: "#ffd24a",
+        textAlign: "center",
+        textTransform: "uppercase",
+      },
     });
   }, [width]);
 
   // token click logic
   const handleTokenPress = (id: string) => {
-    // 4P fixed
     if (playersCount === 4) return;
 
-    // 2P only 2 pairs allowed
     if (playersCount === 2) {
       if (id === "red" || id === "yellow") {
         setSelectedTokens(["red", "yellow"]);
@@ -390,21 +373,17 @@ toastText: {
       return;
     }
 
-    // 3P choose any 3
     if (playersCount === 3) {
       setSelectedTokens((prev) => {
         if (prev.includes(id)) {
-          // cannot remove if it makes < 3
           if (prev.length === 3) return prev.filter((x) => x !== id);
           return prev;
         }
 
-        // max 3 tokens
         if (prev.length >= 3) {
-  showToast("Deselect a token first to select this token");
-  return prev;
-}
-
+          showToast("Deselect a token first to select this token");
+          return prev;
+        }
 
         return [...prev, id];
       });
@@ -422,17 +401,27 @@ toastText: {
     try {
       if (!canCreate) return;
 
+      if (!user?.id) {
+        showToast("PLEASE LOGIN FIRST!");
+        return;
+      }
+
       setLoading(true);
 
+      const hostId = user.id;
+      const hostName =
+        user.fullName ||
+        user.username ||
+        user.primaryEmailAddress?.emailAddress ||
+        "Player";
+
       const res = await createRoom({
-        hostId: userId,
-        hostName: userName,
+        hostId,
+        hostName,
         maxPlayers: playersCount,
         playersCount: playersCount,
-        mode: mode,
+        mode,
         entryCoins: entry,
-
-        // IMPORTANT: you must add this field in schema if not added
         tokenColors: selectedTokens,
       });
 
@@ -442,6 +431,7 @@ toastText: {
       });
     } catch (err: any) {
       console.log("CREATE ROOM ERROR:", err?.message);
+      showToast("ROOM CREATE FAILED!");
     } finally {
       setLoading(false);
     }
@@ -454,6 +444,18 @@ toastText: {
       ? "Select any 3 token colors"
       : "All tokens selected";
 
+  // wait for clerk load
+  if (!isLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0a0a0a", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#ffd24a" />
+        <Text style={{ marginTop: 10, color: "#fff", fontWeight: "900" }}>
+          Loading user...
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.overlay} />
@@ -465,7 +467,10 @@ toastText: {
         <Text style={styles.subtitle}>GAME MODE</Text>
 
         <View style={styles.modeRow}>
-          <Pressable onPress={() => setMode("classic")} style={styles.modeBtnWrap}>
+          <Pressable
+            onPress={() => setMode("classic")}
+            style={styles.modeBtnWrap}
+          >
             <LinearGradient
               colors={
                 mode === "classic"
@@ -478,7 +483,10 @@ toastText: {
             </LinearGradient>
           </Pressable>
 
-          <Pressable onPress={() => setMode("quick")} style={styles.modeBtnWrap}>
+          <Pressable
+            onPress={() => setMode("quick")}
+            style={styles.modeBtnWrap}
+          >
             <LinearGradient
               colors={
                 mode === "quick"
@@ -505,7 +513,12 @@ toastText: {
                 style={[styles.playerBtn, active && styles.playerBtnActive]}
                 onPress={() => setPlayersCount(p as 2 | 3 | 4)}
               >
-                <Text style={[styles.playerText, active && styles.playerTextActive]}>
+                <Text
+                  style={[
+                    styles.playerText,
+                    active && styles.playerTextActive,
+                  ]}
+                >
                   {p}P
                 </Text>
               </Pressable>
@@ -531,20 +544,17 @@ toastText: {
             const selected = selectedTokens.includes(t.id);
 
             return (
-           <Pressable
-  key={t.id}
-  onPress={() => handleTokenPress(t.id)}
-  style={[
-    styles.tokenBox,
-    selected ? styles.tokenBoxActive : styles.tokenBoxInactive,
-  ]}
->
-  {selected && <View style={styles.glowRing} />}
-
-  <Image source={t.img} style={styles.tokenImg} />
-</Pressable>
-
-
+              <Pressable
+                key={t.id}
+                onPress={() => handleTokenPress(t.id)}
+                style={[
+                  styles.tokenBox,
+                  selected ? styles.tokenBoxActive : styles.tokenBoxInactive,
+                ]}
+              >
+                {selected && <View style={styles.glowRing} />}
+                <Image source={t.img} style={styles.tokenImg} />
+              </Pressable>
             );
           })}
         </Animated.View>
@@ -578,11 +588,11 @@ toastText: {
         </Pressable>
       </View>
 
-{toastMsg !== "" && (
-  <View style={styles.toastBox}>
-    <Text style={styles.toastText}>{toastMsg}</Text>
-  </View>
-)}
+      {toastMsg !== "" && (
+        <View style={styles.toastBox}>
+          <Text style={styles.toastText}>{toastMsg}</Text>
+        </View>
+      )}
 
       {/* BACK */}
       <Pressable style={styles.backBtn} onPress={() => router.back()}>

@@ -35,7 +35,6 @@ type Props = {
   onPressSettings?: () => void;
 };
 
-
 const formatNumber = (num: number) => {
   if (num >= 1_000_000_000)
     return (num / 1_000_000_000).toFixed(1).replace(".0", "") + "B";
@@ -45,51 +44,67 @@ const formatNumber = (num: number) => {
   return num.toString();
 };
 
-export default function GameHeader({
-  onPressCoins,
-  onPressGems,
-  onPressStore,
-  onPressSettings,
-}: Props) {
+export default function GameHeader(props: Props){
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { isSignedIn } = useUser();
-
-  const handleCoinsPress = () => {
-  if (!isSignedIn) {
-    router.push("/auth/login");
-    return;
-  }
-  router.push("/inventory");
-};
-
-const handleGemsPress = () => {
-  if (!isSignedIn) {
-    router.push("/auth/login");
-    return;
-  }
-  router.push("/inventory");
-};
-
-const handleStorePress = () => {
-  router.push("/inventory");
-};
-
-const handleSettingsPress = () => {
-  router.push("/settings");
-};
-
+  const { isLoaded: clerkLoaded, isSignedIn } = useUser();
+  const onlineReady = useSelector((state: RootState) => state.app.onlineReady);
 
   // ✅ Redux user data (synced from Convex)
-  const { username, coins, gems, level, imageUrl, isLoaded } = useSelector(
-    (state: RootState) => state.user
-  );
+  const { username, coins, gems, level, imageUrl, isLoaded: reduxLoaded } =
+    useSelector((state: RootState) => state.user);
 
-  const displayName = username || "Player";
-  const displayCoins = coins || 0;
-  const displayGems = gems || 0;
-  const displayLevel = level || 1;
+  const displayCoins = coins ?? 0;
+  const displayGems = gems ?? 0;
+  const displayLevel = level ?? 1;
+
+  // ✅ HANDLERS
+  const handleCoinsPress = () => {
+    if (!clerkLoaded) return;
+
+    if (!isSignedIn) {
+      router.push("/auth/login");
+      return;
+    }
+
+    router.push("/(tabs)/inventory");
+  };
+
+  const handleGemsPress = () => {
+    if (!clerkLoaded) return;
+
+    if (!isSignedIn) {
+      router.push("/auth/login");
+      return;
+    }
+
+    router.push("/(tabs)/inventory");
+  };
+
+  const handleStorePress = () => {
+    if (!clerkLoaded) return;
+
+    // store should work even if redux not loaded
+    router.push("/(tabs)/inventory");
+  };
+
+  const handleSettingsPress = () => {
+    if (!clerkLoaded) return;
+
+    router.push("/(tabs)/settings");
+  };
+
+  const handleProfilePress = () => {
+    if (!clerkLoaded) return;
+
+    if (!isSignedIn) {
+      router.push("/auth/login");
+      return;
+    }
+
+    router.push("/auth/profile");
+  };
 
   return (
     <SafeAreaView
@@ -114,16 +129,7 @@ const handleSettingsPress = () => {
         <View style={styles.glowBorder} />
 
         {/* PROFILE */}
-        <Pressable
-          style={styles.profileBox}
-          onPress={() => {
-            if (isSignedIn) {
-              router.push("/auth/profile");
-            } else {
-              router.push("/auth/login");
-            }
-          }}
-        >
+        <Pressable style={styles.profileBox} onPress={handleProfilePress}>
           <View style={styles.avatarOuter}>
             <LinearGradient
               colors={["#ffe168", "#ff9f00", "#ffe168"]}
@@ -133,8 +139,7 @@ const handleSettingsPress = () => {
                 colors={["#3b5bff", "#1cc8ff"]}
                 style={styles.avatarInner}
               >
-                {/* ✅ SHOW CLERK/CONVEX IMAGE ONLY IF LOGGED IN */}
-                {isSignedIn && isLoaded && imageUrl ? (
+                {onlineReady && reduxLoaded && imageUrl ? (
                   <Image source={{ uri: imageUrl }} style={styles.avatarImg} />
                 ) : (
                   <Text style={styles.avatarText}>👤</Text>
@@ -148,11 +153,11 @@ const handleSettingsPress = () => {
               style={styles.levelBadge}
             >
               <Text style={styles.levelText}>
-                {isSignedIn && isLoaded ? displayLevel : 1}
+                {isSignedIn && reduxLoaded ? displayLevel : 1}
               </Text>
             </LinearGradient>
 
-            <View style={styles.onlineDot} />
+            {onlineReady && <View style={styles.onlineDot} />}
           </View>
         </Pressable>
 
@@ -160,24 +165,25 @@ const handleSettingsPress = () => {
         <View style={styles.walletBox}>
           {isSmallDevice ? (
             <DoubleWalletPill
-              coins={formatNumber(isSignedIn && isLoaded ? displayCoins : 0)}
-              gems={formatNumber(isSignedIn && isLoaded ? displayGems : 0)}
+              coins={formatNumber(isSignedIn && reduxLoaded ? displayCoins : 0)}
+              gems={formatNumber(isSignedIn && reduxLoaded ? displayGems : 0)}
               onPressCoins={handleCoinsPress}
               onPressGems={handleGemsPress}
-
             />
           ) : (
             <>
               <GlassPill
                 icon={require("@/src/assets/images/header/money.png")}
-                value={formatNumber(isSignedIn && isLoaded ? displayCoins : 0)}
+                value={formatNumber(
+                  isSignedIn && reduxLoaded ? displayCoins : 0
+                )}
                 onPressPlus={handleCoinsPress}
               />
 
               <GlassPill
                 icon={require("@/src/assets/images/header/gem.png")}
-                value={formatNumber(isSignedIn && isLoaded ? displayGems : 0)}
-               onPressPlus={handleGemsPress}
+                value={formatNumber(isSignedIn && reduxLoaded ? displayGems : 0)}
+                onPressPlus={handleGemsPress}
               />
             </>
           )}

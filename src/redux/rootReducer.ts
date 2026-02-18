@@ -1,13 +1,14 @@
 import { combineReducers } from "@reduxjs/toolkit";
-
-import gameReducer from "./gameSlice";
+import userReducer from "./userSlice";
 import uiReducer from "./uiSlice";
-import userReducer from "./userSlice"; // ✅ ADD THIS
+import gameReducer from "./gameSlice";
+import appReducer from "./appSlice";
 
 const rootReducer = combineReducers({
-  game: gameReducer,
   ui: uiReducer,
-  user: userReducer, // ✅ ADD THIS
+  user: userReducer,
+  game: gameReducer,
+  app: appReducer,
 });
 
 export default rootReducer;
