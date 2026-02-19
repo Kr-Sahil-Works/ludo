@@ -1,20 +1,28 @@
 import { MainPath, HomePaths } from "./boardPositions";
 import { startingPoints, SafeSpots } from "./plotData";
 
-
 const MAIN_PATH_LENGTH = MainPath.length;
 
-const homeEntryIndexMap = {
-  0: MainPath.findIndex((p) => p.id === 52), // red
-  1: MainPath.findIndex((p) => p.id === 13), // green
-  2: MainPath.findIndex((p) => p.id === 26), // yellow
-  3: MainPath.findIndex((p) => p.id === 39), // blue
+// map color -> entry cell id
+const homeEntryIdByColor: Record<string, number> = {
+  red: 52,
+  green: 13,
+  yellow: 26,
+  blue: 39,
 };
 
-const getHomePath = (playerIndex: number) => {
-  if (playerIndex === 0) return HomePaths.red;
-  if (playerIndex === 1) return HomePaths.green;
-  if (playerIndex === 2) return HomePaths.yellow;
+// map color -> starting cell id
+const startingIdByColor: Record<string, number> = {
+  red: startingPoints[0], // 1
+  green: startingPoints[1], // 14
+  yellow: startingPoints[2], // 27
+  blue: startingPoints[3], // 40
+};
+
+const getHomePathByColor = (color: string) => {
+  if (color === "red") return HomePaths.red;
+  if (color === "green") return HomePaths.green;
+  if (color === "yellow") return HomePaths.yellow;
   return HomePaths.blue;
 };
 
@@ -22,29 +30,23 @@ const isMainPathPos = (pos: number) => {
   return MainPath.some((p) => p.id === pos);
 };
 
-const isHomePathPos = (playerIndex: number, pos: number) => {
-  return getHomePath(playerIndex).some((p) => p.id === pos);
-};
-
 const getMainIndex = (pos: number) => {
   return MainPath.findIndex((p) => p.id === pos);
 };
 
-const getHomeIndex = (playerIndex: number, pos: number) => {
-  return getHomePath(playerIndex).findIndex((p) => p.id === pos);
+const getHomeIndex = (homePath: any[], pos: number) => {
+  return homePath.findIndex((p: any) => p.id === pos);
 };
 
-export const getVictoryId = (playerIndex: number) => {
-  const homePath = getHomePath(playerIndex);
+export const getVictoryIdByColor = (color: string) => {
+  const homePath = getHomePathByColor(color);
   return homePath[homePath.length - 1].id;
 };
 
-// winner check
-export const checkWinner = (playerIndex: number, pos: number) => {
-  return pos === getVictoryId(playerIndex);
+export const checkWinner = (color: string, pos: number) => {
+  return pos === getVictoryIdByColor(color);
 };
 
-// safe spot check
 export const isSafeSpot = (pos: number) => {
   return SafeSpots.includes(pos);
 };
@@ -61,7 +63,7 @@ export function findCutTokens(players: any[], currentPlayer: number, pos: number
       .map((t: number, idx: number) => ({ t, idx }))
       .filter((obj: any) => obj.t === pos);
 
-    // ✅ BLOCK RULE (2+ tokens = no cut)
+    // BLOCK rule: if 2+ tokens stacked, cannot cut
     if (tokensAtPos.length >= 2) {
       return [];
     }
@@ -74,10 +76,9 @@ export function findCutTokens(players: any[], currentPlayer: number, pos: number
   return cuts;
 }
 
-
-// ✅ FIXED: step-by-step movement
+// ✅ FIXED: movement uses player.color instead of playerIndex
 export const moveTokenSteps = (
-  playerIndex: number,
+  player: any,
   currentPos: number,
   diceValue: number
 ): number[] => {
@@ -85,27 +86,31 @@ export const moveTokenSteps = (
 
   if (diceValue <= 0) return steps;
 
+  const color = player.color || "red";
+  const homePath = getHomePathByColor(color);
+  const homeEntryId = homeEntryIdByColor[color] ?? 52;
+  const startingId = startingIdByColor[color] ?? 1;
+
   // token at home
   if (currentPos === 0) {
     if (diceValue === 6) {
-      steps.push(startingPoints[playerIndex]);
+      steps.push(startingId);
     }
     return steps;
   }
 
   // already finished
-  if (currentPos === getVictoryId(playerIndex)) return steps;
-
-  const homePath = getHomePath(playerIndex);
+  if (currentPos === getVictoryIdByColor(color)) return steps;
 
   // inside home lane
-  if (isHomePathPos(playerIndex, currentPos)) {
-    const homeIndex = getHomeIndex(playerIndex, currentPos);
+  const isInHomeLane = homePath.some((p: any) => p.id === currentPos);
+
+  if (isInHomeLane) {
+    const homeIndex = getHomeIndex(homePath, currentPos);
 
     for (let i = 1; i <= diceValue; i++) {
       const nextIndex = homeIndex + i;
-
-      if (nextIndex >= homePath.length) return []; // cannot move
+      if (nextIndex >= homePath.length) return [];
       steps.push(homePath[nextIndex].id);
     }
 
@@ -115,18 +120,15 @@ export const moveTokenSteps = (
   // inside main path
   if (isMainPathPos(currentPos)) {
     const currentIndex = getMainIndex(currentPos);
-    const homeEntryIndex = homeEntryIndexMap[playerIndex as 0 | 1 | 2 | 3];
+    const homeEntryIndex = MainPath.findIndex((p) => p.id === homeEntryId);
 
-    // ✅ distance from currentIndex to homeEntryIndex (forward wrap safe)
     let distanceToEntry = homeEntryIndex - currentIndex;
     if (distanceToEntry < 0) distanceToEntry += MAIN_PATH_LENGTH;
 
     for (let i = 1; i <= diceValue; i++) {
-      // ✅ if crossed entry -> go into home lane
       if (i > distanceToEntry) {
         const stepsIntoHome = i - distanceToEntry - 1;
-
-        if (stepsIntoHome >= homePath.length) return []; // cannot move
+        if (stepsIntoHome >= homePath.length) return [];
         steps.push(homePath[stepsIntoHome].id);
       } else {
         const nextIndex = (currentIndex + i) % MAIN_PATH_LENGTH;
@@ -141,31 +143,33 @@ export const moveTokenSteps = (
 };
 
 export const moveTokenWithPath = (
-  playerIndex: number,
+  player: any,
   currentPos: number,
   diceValue: number
 ): number => {
-  const steps = moveTokenSteps(playerIndex, currentPos, diceValue);
-
+  const steps = moveTokenSteps(player, currentPos, diceValue);
   if (steps.length === 0) return currentPos;
-
   return steps[steps.length - 1];
 };
 
-// ✅ FIXED reverse animation to home
+// reverse movement when cut
 export const moveTokenReverseSteps = (
-  playerIndex: number,
+  player: any,
   currentPos: number
 ): number[] => {
   const steps: number[] = [];
 
   if (currentPos === 0) return steps;
 
-  const homePath = getHomePath(playerIndex);
+  const color = player.color || "red";
+  const homePath = getHomePathByColor(color);
+  const startingId = startingIdByColor[color] ?? 1;
 
   // if token is in home lane
-  if (isHomePathPos(playerIndex, currentPos)) {
-    const homeIndex = getHomeIndex(playerIndex, currentPos);
+  const isInHomeLane = homePath.some((p: any) => p.id === currentPos);
+
+  if (isInHomeLane) {
+    const homeIndex = getHomeIndex(homePath, currentPos);
 
     for (let i = homeIndex - 1; i >= 0; i--) {
       steps.push(homePath[i].id);
@@ -185,7 +189,7 @@ export const moveTokenReverseSteps = (
 
       steps.push(MainPath[currentIndex].id);
 
-      if (MainPath[currentIndex].id === startingPoints[playerIndex]) break;
+      if (MainPath[currentIndex].id === startingId) break;
     }
 
     steps.push(0);

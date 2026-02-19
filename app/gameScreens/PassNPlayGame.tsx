@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -19,7 +19,6 @@ import {
   setMusicEnabled,
   setAllSoundEnabled,
 } from "@/src/utils/sound";
-
 
 import { router, useLocalSearchParams } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
@@ -52,7 +51,6 @@ const GreenToken = require("@/src/assets/images/piles/green_1024_transparent.png
 const YellowToken = require("@/src/assets/images/piles/yellow_1024_transparent.png");
 const BlueToken = require("@/src/assets/images/piles/blue_1024_transparent.png");
 
-
 const { width } = Dimensions.get("window");
 
 const BOX_W = width * 0.34;
@@ -60,18 +58,19 @@ const BOX_H = width * 0.18;
 
 export default function PassNPlayGame() {
   const { width, height } = useWindowDimensions();
+
+  const clamp = (val: number, min: number, max: number) => {
+  return Math.min(Math.max(val, min), max);
+};
+
   const params = useLocalSearchParams();
   const dispatch = useDispatch();
 
-  // ✅ CHECK IF RESUME GAME
   const isGameSaved = useSelector((state: any) => state.game.isGameSaved);
 
-  // ✅ GET SAVED CONFIG FROM REDUX
   const savedColors = useSelector((state: any) => state.game.selectedColors);
   const savedMode = useSelector((state: any) => state.game.gameMode);
 
-  // ✅ IF RESUME -> USE SAVED CONFIG
-  // ✅ IF NEW GAME -> USE PARAMS
   const colorsRaw = isGameSaved
     ? savedColors.join(",")
     : String(params.colors || "red,green");
@@ -84,7 +83,6 @@ export default function PassNPlayGame() {
 
   const gameMode = modeParam === "quick" ? "quick" : "classic";
 
-  // ✅ SAVE CONFIG ONLY FOR NEW GAME
   useEffect(() => {
     if (!isGameSaved) {
       dispatch(
@@ -102,7 +100,22 @@ export default function PassNPlayGame() {
   const players = useSelector(selectPlayers);
   const winner = useSelector(selectWinner);
 
+  // Board size
   const boardSize = Math.min(width * 0.95, height * 0.55);
+
+  // Center board position
+  const boardTop = (height - boardSize) / 2;
+
+const SAFE_TOP = 40;
+const SAFE_BOTTOM = 40;
+const GAP = 12;
+
+const topCandidate = boardTop - BOX_H - GAP;
+const bottomCandidate = boardTop + boardSize + GAP;
+
+const TOP_BOX_Y = clamp(topCandidate, SAFE_TOP, height - SAFE_BOTTOM - BOX_H);
+const BOTTOM_BOX_Y = clamp(bottomCandidate, SAFE_TOP, height - SAFE_BOTTOM - BOX_H);
+
 
   const [showFirework, setShowFirework] = useState(false);
   const [showTrophy, setShowTrophy] = useState(false);
@@ -114,9 +127,7 @@ export default function PassNPlayGame() {
   const [musicOn, setMusicOn] = useState(false);
   const [allSoundOn, setAllSoundOn] = useState(true);
 
-  
-
-  // ✅ ACTIVE PLAYER INDEXES GENERATED ALWAYS FROM selectedColors
+  // ACTIVE PLAYERS
   const activePlayerIndexes: number[] = [];
   if (selectedColors.includes("red")) activePlayerIndexes.push(0);
   if (selectedColors.includes("green")) activePlayerIndexes.push(1);
@@ -155,7 +166,7 @@ export default function PassNPlayGame() {
     activePlayerIndexes,
   });
 
-  // ✅ MENU SLIDE ANIM (START HIDDEN)
+  // MENU SLIDE
   const menuSlideAnim = useRef(new Animated.Value(80)).current;
 
   useEffect(() => {
@@ -171,23 +182,7 @@ export default function PassNPlayGame() {
     return () => clearTimeout(timer);
   }, []);
 
-  // shimmer animation
-  const shimmerAnim = useRef(new Animated.Value(-100)).current;
-
-  useEffect(() => {
-    shimmerAnim.setValue(-100);
-
-    Animated.loop(
-      Animated.timing(shimmerAnim, {
-        toValue: 180,
-        duration: 3200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  // glow animation
+  // GLOW LOOP
   const glowAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -223,73 +218,92 @@ export default function PassNPlayGame() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1800);
+    const timer = setTimeout(() => setLoading(false), 1600);
     return () => clearTimeout(timer);
   }, []);
 
+  // ---------------- SLIDE ANIMATION PER PLAYER ----------------
+ const SLIDE_DISTANCE = width < 380 ? 40 : 70;
+
+const slideRed = useRef(new Animated.Value(-25)).current;
+const slideBlue = useRef(new Animated.Value(-25)).current;
+const slideGreen = useRef(new Animated.Value(25)).current;
+const slideYellow = useRef(new Animated.Value(25)).current;
+
+
+
+  const liftRed = useRef(new Animated.Value(0)).current;
+  const liftGreen = useRef(new Animated.Value(0)).current;
+  const liftYellow = useRef(new Animated.Value(0)).current;
+  const liftBlue = useRef(new Animated.Value(0)).current;
+
+  const runTurnAnim = (playerIndex: number) => {
+    const slideMap: any = {
+      0: slideRed,
+      1: slideGreen,
+      2: slideYellow,
+      3: slideBlue,
+    };
+
+    const liftMap: any = {
+      0: liftRed,
+      1: liftGreen,
+      2: liftYellow,
+      3: liftBlue,
+    };
+
+    const slide = slideMap[playerIndex];
+    const lift = liftMap[playerIndex];
+
+    // reset all lifts
+    liftRed.setValue(0);
+    liftGreen.setValue(0);
+    liftYellow.setValue(0);
+    liftBlue.setValue(0);
+
+    // bring active slightly up
+    Animated.parallel([
+      Animated.spring(lift, {
+        toValue: -10,
+        useNativeDriver: true,
+        friction: 6,
+        tension: 70,
+      }),
+
+      Animated.sequence([
+        Animated.timing(slide, {
+          toValue: 0,
+          duration: 240,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  };
+
+  useEffect(() => {
+    runTurnAnim(currentPlayer);
+  }, [currentPlayer]);
+
+  // ---------------- POSITION SYSTEM ----------------
+ const getBoxStyle = (playerIndex: number) => {
+  const SIDE_GAP = 10;
+
+  const LEFT_X = SIDE_GAP;
+  const RIGHT_X = SIDE_GAP;
+
+  if (playerIndex === 0) return { top: TOP_BOX_Y, left: LEFT_X };
+  if (playerIndex === 1) return { top: TOP_BOX_Y, right: RIGHT_X };
+  if (playerIndex === 2) return { top: BOTTOM_BOX_Y, right: RIGHT_X };
+  return { top: BOTTOM_BOX_Y, left: LEFT_X };
+};
+
+
   if (loading) return <GameSkeleton />;
+
 
   return (
     <ImageBackground source={GameBG} style={styles.container} resizeMode="cover">
-      {/* TOP PLAYERS */}
-      <View style={styles.topRow}>
-        {showRed && (
-          <View style={styles.playerOuter}>
-            <Animated.View
-              style={[
-                styles.playerBoxSmall,
-                currentPlayer === 0 && styles.activeBox,
-                currentPlayer === 0 && activeGlowStyle,
-              ]}
-            >
-              <View style={styles.boxRow}>
-                <Image source={RedToken} style={styles.bigToken} />
-
-                <View style={styles.diceSlotBorder}>
-                  <View style={styles.diceSlot}>
-                    {currentPlayer === 0 ? (
-                      <DiceRoll
-                        displayDice={diceValue > 0 ? diceValue : lastDiceValue}
-                        onFinish={roll}
-                        disabled={!canRollDice}
-                      />
-                    ) : null}
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-          </View>
-        )}
-
-        {showGreen && (
-          <View style={styles.playerOuter}>
-            <Animated.View
-              style={[
-                styles.playerBoxSmall,
-                currentPlayer === 1 && styles.activeBox,
-                currentPlayer === 1 && activeGlowStyle,
-              ]}
-            >
-              <View style={styles.boxRow}>
-                <Image source={GreenToken} style={styles.bigToken} />
-
-                <View style={styles.diceSlotBorder}>
-                  <View style={styles.diceSlot}>
-                    {currentPlayer === 1 ? (
-                      <DiceRoll
-                        displayDice={diceValue > 0 ? diceValue : lastDiceValue}
-                        onFinish={roll}
-                        disabled={!canRollDice}
-                      />
-                    ) : null}
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-          </View>
-        )}
-      </View>
-
       {/* MENU */}
       <Animated.View
         style={[
@@ -316,37 +330,32 @@ export default function PassNPlayGame() {
         </Pressable>
       </Animated.View>
 
-      {/* BOARD */}
-      <View style={styles.boardContainer}>
-        <LudoBoard
-          boardSize={boardSize}
-          players={players.filter((_, idx) => activePlayerIndexes.includes(idx))}
-          onTokenPress={onTokenPress}
-          diceValue={diceValue}
-          currentPlayer={currentPlayer}
-          movableTokens={movableTokens}
-          cuttingTokenKey={cuttingTokenKey}
-          activePlayerIndexes={activePlayerIndexes}
-        />
-      </View>
-
-      {/* BOTTOM PLAYERS */}
-      <View style={styles.bottomRow}>
-        {showBlue && (
-          <View style={styles.playerOuter}>
+      {/* TURN BOXES LAYER */}
+      <View style={styles.turnBoxesLayer} pointerEvents="box-none">
+        {/* RED */}
+        {showRed && (
+          <Animated.View
+            style={[
+              styles.turnBoxWrap,
+              getBoxStyle(0),
+              {
+                transform: [{ translateX: slideRed }, { translateY: liftRed }],
+              },
+            ]}
+          >
             <Animated.View
               style={[
                 styles.playerBoxSmall,
-                currentPlayer === 3 && styles.activeBox,
-                currentPlayer === 3 && activeGlowStyle,
+                currentPlayer === 0 && styles.activeBox,
+                currentPlayer === 0 && activeGlowStyle,
               ]}
             >
               <View style={styles.boxRow}>
-                <Image source={BlueToken} style={styles.bigToken} />
+                <Image source={RedToken} style={styles.bigToken} />
 
                 <View style={styles.diceSlotBorder}>
                   <View style={styles.diceSlot}>
-                    {currentPlayer === 3 ? (
+                    {currentPlayer === 0 ? (
                       <DiceRoll
                         displayDice={diceValue > 0 ? diceValue : lastDiceValue}
                         onFinish={roll}
@@ -357,11 +366,60 @@ export default function PassNPlayGame() {
                 </View>
               </View>
             </Animated.View>
-          </View>
+          </Animated.View>
         )}
 
+        {/* GREEN */}
+        {showGreen && (
+          <Animated.View
+            style={[
+              styles.turnBoxWrap,
+              getBoxStyle(1),
+              {
+                transform: [{ translateX: slideGreen }, { translateY: liftGreen }],
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.playerBoxSmall,
+                currentPlayer === 1 && styles.activeBox,
+                currentPlayer === 1 && activeGlowStyle,
+              ]}
+            >
+              <View style={styles.boxRow}>
+                <Image source={GreenToken} style={styles.bigToken} />
+
+                <View style={styles.diceSlotBorder}>
+                  <View style={styles.diceSlot}>
+                    {currentPlayer === 1 ? (
+                      <DiceRoll
+                        displayDice={diceValue > 0 ? diceValue : lastDiceValue}
+                        onFinish={roll}
+                        disabled={!canRollDice}
+                      />
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        )}
+
+        {/* YELLOW */}
         {showYellow && (
-          <View style={styles.playerOuter}>
+          <Animated.View
+            style={[
+              styles.turnBoxWrap,
+              getBoxStyle(2),
+              {
+                transform: [
+                  { translateX: slideYellow },
+                  { translateY: liftYellow },
+                ],
+              },
+            ]}
+          >
             <Animated.View
               style={[
                 styles.playerBoxSmall,
@@ -385,8 +443,59 @@ export default function PassNPlayGame() {
                 </View>
               </View>
             </Animated.View>
-          </View>
+          </Animated.View>
         )}
+
+        {/* BLUE */}
+        {showBlue && (
+          <Animated.View
+            style={[
+              styles.turnBoxWrap,
+              getBoxStyle(3),
+              {
+                transform: [{ translateX: slideBlue }, { translateY: liftBlue }],
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.playerBoxSmall,
+                currentPlayer === 3 && styles.activeBox,
+                currentPlayer === 3 && activeGlowStyle,
+              ]}
+            >
+              <View style={styles.boxRow}>
+                <Image source={BlueToken} style={styles.bigToken} />
+
+                <View style={styles.diceSlotBorder}>
+                  <View style={styles.diceSlot}>
+                    {currentPlayer === 3 ? (
+                      <DiceRoll
+                        displayDice={diceValue > 0 ? diceValue : lastDiceValue}
+                        onFinish={roll}
+                        disabled={!canRollDice}
+                      />
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        )}
+      </View>
+
+      {/* BOARD */}
+      <View style={styles.boardContainer}>
+        <LudoBoard
+          boardSize={boardSize}
+          players={players.filter((_, idx) => activePlayerIndexes.includes(idx))}
+          onTokenPress={onTokenPress}
+          diceValue={diceValue}
+          currentPlayer={currentPlayer}
+          movableTokens={movableTokens}
+          cuttingTokenKey={cuttingTokenKey}
+          activePlayerIndexes={activePlayerIndexes}
+        />
       </View>
 
       {/* FIREWORK */}
@@ -401,111 +510,127 @@ export default function PassNPlayGame() {
         </View>
       )}
 
-  
+      {/* WINNER */}
+      <WinnerCardModal
+        visible={showTrophy}
+        winnerIndex={currentPlayer}
+        onHome={() => {
+          router.replace("/");
+        }}
+        onPlayAgain={() => {
+          setShowTrophy(false);
 
-<WinnerCardModal
-  visible={showTrophy}
-  winnerIndex={currentPlayer} // ✅ winner token index (0-3)
-  onHome={() => {
-    router.replace("/");
-  }}
-  onPlayAgain={() => {
-    setShowTrophy(false);
-
-    router.replace({
-      pathname: "/gameScreens/PassNPlayGame",
-      params: {
-        mode: gameMode,
-        colors: selectedColors.join(","),
-        players: selectedColors.length.toString(),
-      },
-    });
-  }}
-/>
-
-
-
-
-
-
+          router.replace({
+            pathname: "/gameScreens/PassNPlayGame",
+            params: {
+              mode: gameMode,
+              colors: selectedColors.join(","),
+              players: selectedColors.length.toString(),
+            },
+          });
+        }}
+      />
 
       {/* PAUSE MODAL */}
-     <GamePauseModal
-  visible={showPause}
-  onClose={() => {
-    setShowPause(false);
+      <GamePauseModal
+        visible={showPause}
+        onClose={() => {
+          setShowPause(false);
 
-    Animated.timing(menuSlideAnim, {
-      toValue: 22,
-      duration: 350,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-  }}
-  mode={gameMode}
-  fxOn={fxOn}
-  musicOn={musicOn}
-  allSoundOn={allSoundOn}
-  onToggleFX={() => {
-    const newVal = !fxOn;
-    setFxOn(newVal);
-    setFXEnabled(newVal);
-  }}
-  onToggleMusic={() => {
-    const newVal = !musicOn;
-    setMusicOn(newVal);
-    setMusicEnabled(newVal);
+          Animated.timing(menuSlideAnim, {
+            toValue: 22,
+            duration: 350,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }).start();
+        }}
+        mode={gameMode}
+        fxOn={fxOn}
+        musicOn={musicOn}
+        allSoundOn={allSoundOn}
+        onToggleFX={() => {
+          const newVal = !fxOn;
+          setFxOn(newVal);
+          setFXEnabled(newVal);
+        }}
+        onToggleMusic={() => {
+          const newVal = !musicOn;
+          setMusicOn(newVal);
+          setMusicEnabled(newVal);
 
-    // ✅ if turned ON, play theme
-    if (newVal) {
-      playBG("home");
-    } else {
-      stopBG();
-    }
-  }}
-  onToggleAllSound={() => {
-    const newVal = !allSoundOn;
-    setAllSoundOn(newVal);
-    setAllSoundEnabled(newVal);
+          if (newVal) {
+            playBG("home");
+          } else {
+            stopBG();
+          }
+        }}
+        onToggleAllSound={() => {
+          const newVal = !allSoundOn;
+          setAllSoundOn(newVal);
+          setAllSoundEnabled(newVal);
 
-    // ✅ if turning OFF, force both off
-    if (!newVal) {
-      setFxOn(false);
-      setMusicOn(false);
-      setFXEnabled(false);
-      setMusicEnabled(false);
-      stopAllSound();
-    } else {
-      // turning ON restores FX default ON, music stays OFF
-      setFxOn(true);
-      setFXEnabled(true);
+          if (!newVal) {
+            setFxOn(false);
+            setMusicOn(false);
+            setFXEnabled(false);
+            setMusicEnabled(false);
+            stopAllSound();
+          } else {
+            setFxOn(true);
+            setFXEnabled(true);
 
-      setMusicOn(false);
-      setMusicEnabled(false);
-    }
-  }}
-  onExitGame={() => {
-    dispatch(clearSavedGame());
-    router.replace("/");
-  }}
-/>
-
+            setMusicOn(false);
+            setMusicEnabled(false);
+          }
+        }}
+        onExitGame={() => {
+          dispatch(clearSavedGame());
+          router.replace("/");
+        }}
+      />
     </ImageBackground>
   );
 }
 
 export const styles = StyleSheet.create({
-  menuPeekWrapper: {
+  container: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  boardContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // TURN BOX LAYER
+  turnBoxesLayer: {
     position: "absolute",
-    top: 50,
-    right: -16,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 99999,
     elevation: 99999,
   },
 
-  menuPeekBtn: {
-    width: 55,
-    height: 45,
+  turnBoxWrap: {
+    position: "absolute",
+  },
+
+  // MENU
+  menuPeekWrapper: {
+    position: "absolute",
+    right: width < 380 ? 6 : -10,
+    top: width < 380 ? 55 : 70,
+    zIndex: 99999,
+    elevation: 99999,
+  },
+
+menuPeekBtn: {
+  width: width < 380 ? 70 : 55,
+  height: width < 380 ? 55 : 45,
     borderTopLeftRadius: 18,
     borderBottomLeftRadius: 18,
     backgroundColor: "rgba(0,0,0,0.55)",
@@ -521,37 +646,7 @@ export const styles = StyleSheet.create({
     resizeMode: "contain",
   },
 
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  topRow: {
-    width: "94%",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-
-  bottomRow: {
-    width: "94%",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-
-  boardContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 10,
-  },
-
-  playerOuter: {
-    borderRadius: 18,
-    overflow: "hidden",
-  },
-
+  // PLAYER BOX
   playerBoxSmall: {
     width: BOX_W,
     height: BOX_H,
@@ -605,21 +700,7 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  shimmerLine: {
-    position: "absolute",
-    top: -BOX_H * 0.25,
-    left: -BOX_W * 0.35,
-    width: BOX_W * 0.18,
-    height: BOX_H * 1.6,
-    borderRadius: 60,
-    zIndex: 10,
-    backgroundColor: "rgba(14, 161, 169, 0.18)",
-    shadowColor: "#00ffff",
-    shadowOpacity: 0.55,
-    shadowRadius: 20,
-    elevation: 20,
-  },
-
+  // FIREWORK
   fireworkOverlay: {
     position: "absolute",
     top: 0,
@@ -628,15 +709,5 @@ export const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 999999,
     elevation: 999999,
-  },
-
-  trophyOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 9999999,
-    elevation: 9999999,
   },
 });

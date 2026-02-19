@@ -1,10 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Animated, Dimensions, Easing } from "react-native";
-import { BlurView } from "expo-blur";
 
 const { width } = Dimensions.get("window");
 
-const SIZE = width * 0.14; // ✅ bigger dice
+const SIZE = width * 0.14;
+
+type DotPos =
+  | "topLeft"
+  | "topRight"
+  | "midLeft"
+  | "midRight"
+  | "bottomLeft"
+  | "bottomRight"
+  | "center";
 
 export default function HomeLoader() {
   const upAnim = useRef(new Animated.Value(0)).current;
@@ -16,7 +24,6 @@ export default function HomeLoader() {
   );
 
   useEffect(() => {
-    // faster movement
     Animated.loop(
       Animated.sequence([
         Animated.timing(upAnim, {
@@ -60,7 +67,6 @@ export default function HomeLoader() {
       })
     ).start();
 
-    // random dice number update
     const interval = setInterval(() => {
       setDiceValues(
         Array.from({ length: 7 }, () => Math.floor(Math.random() * 6) + 1)
@@ -68,7 +74,7 @@ export default function HomeLoader() {
     }, 350);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [upAnim, downAnim, rotateAnim]);
 
   const rotate = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -76,41 +82,40 @@ export default function HomeLoader() {
   });
 
   const renderDots = (value: number) => {
-    type DotPos =
-  | "topLeft"
-  | "topRight"
-  | "midLeft"
-  | "midRight"
-  | "bottomLeft"
-  | "bottomRight"
-  | "center";
-
-const dot = (pos: DotPos) => (
-  <View key={pos} style={[styles.dot, styles[pos]]} />
-);
+    const dot = (pos: DotPos) => (
+      <View key={pos} style={[styles.dot, styles[pos]]} />
+    );
 
     const map: Record<number, DotPos[]> = {
-
       1: ["center"],
       2: ["topLeft", "bottomRight"],
       3: ["topLeft", "center", "bottomRight"],
       4: ["topLeft", "topRight", "bottomLeft", "bottomRight"],
       5: ["topLeft", "topRight", "center", "bottomLeft", "bottomRight"],
-      6: ["topLeft", "topRight", "midLeft", "midRight", "bottomLeft", "bottomRight"],
+      6: [
+        "topLeft",
+        "topRight",
+        "midLeft",
+        "midRight",
+        "bottomLeft",
+        "bottomRight",
+      ],
     };
 
-    return map[value].map(dot);
+    return (map[value] ?? map[1]).map(dot);
   };
 
   return (
     <View style={styles.fullScreen}>
       <View style={styles.loader}>
         {/* 🎲 Column 1 */}
-        <Animated.View style={[styles.container, { transform: [{ translateY: downAnim }] }]}>
+        <Animated.View
+          style={[styles.container, { transform: [{ translateY: downAnim }] }]}
+        >
           <View style={styles.carousel}>
-            {diceValues.map((v, i) => (
+            {(diceValues ?? []).map((v, i) => (
               <View key={i} style={styles.diceWrap}>
-                <BlurView intensity={25} tint="dark" style={styles.blurLayer} />
+                <View style={styles.glassLayer} />
                 <View style={styles.dice}>{renderDots(v)}</View>
               </View>
             ))}
@@ -118,14 +123,16 @@ const dot = (pos: DotPos) => (
         </Animated.View>
 
         {/* 🎲 Column 2 */}
-        <Animated.View style={[styles.container, { transform: [{ translateY: upAnim }] }]}>
+        <Animated.View
+          style={[styles.container, { transform: [{ translateY: upAnim }] }]}
+        >
           <View style={styles.carousel}>
-            {diceValues.map((v, i) => (
+            {(diceValues ?? []).map((v, i) => (
               <Animated.View
                 key={i}
                 style={[styles.diceWrap, { transform: [{ rotate }] }]}
               >
-                <BlurView intensity={25} tint="dark" style={styles.blurLayer} />
+                <View style={styles.glassLayer} />
                 <View style={styles.dice}>{renderDots(v)}</View>
               </Animated.View>
             ))}
@@ -133,11 +140,13 @@ const dot = (pos: DotPos) => (
         </Animated.View>
 
         {/* 🎲 Column 3 */}
-        <Animated.View style={[styles.container, { transform: [{ translateY: downAnim }] }]}>
+        <Animated.View
+          style={[styles.container, { transform: [{ translateY: downAnim }] }]}
+        >
           <View style={styles.carousel}>
-            {diceValues.map((v, i) => (
+            {(diceValues ?? []).map((v, i) => (
               <View key={i} style={styles.diceWrap}>
-                <BlurView intensity={25} tint="dark" style={styles.blurLayer} />
+                <View style={styles.glassLayer} />
                 <View style={styles.dice}>{renderDots(v)}</View>
               </View>
             ))}
@@ -179,19 +188,22 @@ const styles = StyleSheet.create({
     gap: 22,
   },
 
-  blurLayer: {
-    position: "absolute",
-    width: "160%",
-    height: "160%",
-    borderRadius: 30,
-    opacity: 0,
-  },
-
   diceWrap: {
     width: SIZE,
     height: SIZE,
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  // ✅ Fake Blur Glass Effect (NO expo-blur)
+  glassLayer: {
+    position: "absolute",
+    width: "135%",
+    height: "135%",
+    borderRadius: 30,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
   },
 
   dice: {

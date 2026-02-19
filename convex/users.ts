@@ -141,12 +141,15 @@ export const upsertUser = mutation({
 export const getUser = query({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
+    if (args.clerkId === "guest") return null;
+
     return await ctx.db
       .query("users")
       .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
       .unique();
   },
 });
+
 
 export const addCoins = mutation({
   args: {

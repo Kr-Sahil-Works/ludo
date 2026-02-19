@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -46,13 +46,6 @@ export default function OnlineRoomScreen() {
 
   const { user, isLoaded } = useUser();
 
-  // scale helper
-  const s = (val: number) => {
-    const base = 390;
-    const scale = width / base;
-    return Math.round(val * Math.min(Math.max(scale, 0.85), 1.4));
-  };
-
   const [activeTab, setActiveTab] = useState<"create" | "join">("create");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,6 +57,21 @@ export default function OnlineRoomScreen() {
   const isHighLobby = entryCoins >= 10000;
 
   const joinRoom = useMutation(api.rooms.joinRoom);
+
+  // ✅ RECONNECT QUERY
+  const activeRoom = useQuery(
+    api.rooms.getMyActiveRoom,
+    user?.id ? { userId: user.id } : "skip"
+  );
+
+  const reconnectDoneRef = useRef(false);
+
+  // scale helper
+  const s = (val: number) => {
+    const base = 390;
+    const scale = width / base;
+    return Math.round(val * Math.min(Math.max(scale, 0.85), 1.4));
+  };
 
   // animations
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -371,8 +379,51 @@ export default function OnlineRoomScreen() {
         color: "#ffffff",
         textTransform: "uppercase",
       },
+
+      reconnectText: {
+        marginTop: s(14),
+        fontSize: s(13),
+        fontWeight: "900",
+        color: "#ffd24a",
+        textAlign: "center",
+        textTransform: "uppercase",
+      },
     });
   }, [width]);
+
+  // ✅ AUTO RECONNECT EFFECT
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!user?.id) return;
+
+    // convex still loading
+    if (activeRoom === undefined) return;
+
+    // prevent multiple router pushes
+    if (reconnectDoneRef.current) return;
+
+    if (activeRoom?.code) {
+      reconnectDoneRef.current = true;
+
+      // waiting -> lobby
+      if (activeRoom.status === "waiting") {
+        router.replace({
+          pathname: "/pages_modals/online/room/[code]",
+          params: { code: activeRoom.code },
+        });
+        return;
+      }
+
+      // playing -> game
+      if (activeRoom.status === "playing") {
+        router.replace({
+          pathname: "/pages_modals/online/game/[code]",
+          params: { code: activeRoom.code },
+        });
+        return;
+      }
+    }
+  }, [activeRoom, isLoaded, user?.id]);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -492,11 +543,31 @@ export default function OnlineRoomScreen() {
     shakeAnim.setValue(0);
 
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 8,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -8,
+        duration: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 60,
+        useNativeDriver: true,
+      }),
     ]).start();
   };
 
@@ -525,7 +596,10 @@ export default function OnlineRoomScreen() {
 
       const userId = user.id;
       const userName =
-        user.fullName || user.username || user.primaryEmailAddress?.emailAddress || "Player";
+        user.fullName ||
+        user.username ||
+        user.primaryEmailAddress?.emailAddress ||
+        "Player";
 
       await joinRoom({
         code: trimmed,
@@ -570,7 +644,14 @@ export default function OnlineRoomScreen() {
   // wait for clerk load
   if (!isLoaded) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#0a0a0a", justifyContent: "center", alignItems: "center" }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#0a0a0a",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator size="large" color="#ffd24a" />
         <Text style={{ marginTop: 10, color: "#fff", fontWeight: "900" }}>
           Loading user...
@@ -578,6 +659,28 @@ export default function OnlineRoomScreen() {
       </View>
     );
   }
+
+  // show reconnect loader
+  if (user?.id && activeRoom === undefined) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#0a0a0a",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color="#ffd24a" />
+        <Text style={{ marginTop: 10, color: "#fff", fontWeight: "900" }}>
+          Checking active match...
+        </Text>
+      </View>
+    );
+  }
+
+  const disableMinus = entryIndex === 0;
+  const disablePlus = entryIndex === ENTRY_LIST.length - 1;
 
   return (
     <KeyboardAvoidingView
@@ -701,11 +804,15 @@ export default function OnlineRoomScreen() {
                   />
                 </Animated.View>
 
-                <Pressable
-                  style={[styles.mainBtn, loading && { opacity: 0.6 }]}
-                  onPress={handleJoin}
-                  disabled={loading}
-                >
+               <Pressable
+  style={[
+    styles.mainBtn,
+    (loading || !!activeRoom?.code) && { opacity: 0.6 },
+  ]}
+  onPress={handleJoin}
+  disabled={loading || !!activeRoom?.code}
+>
+
                   <LinearGradient
                     colors={["#1ed6d6", "#025c5c"]}
                     style={styles.btnGradient}
@@ -722,7 +829,20 @@ export default function OnlineRoomScreen() {
 
                 {/* ENTRY BOX */}
                 <View style={styles.entryBox}>
-                  <Pressable style={styles.circleBtn} onPress={handleMinus}>
+                  {/* MINUS */}
+                  <Pressable
+                    style={[
+                      styles.circleBtn,
+                      disableMinus && { opacity: 0.4 },
+                    ]}
+                    disabled={disableMinus}
+                    onPress={() => {
+                      if (!disableMinus) {
+                        playFX("coins_sound");
+                        handleMinus();
+                      }
+                    }}
+                  >
                     <Text style={styles.circleText}>-</Text>
                   </Pressable>
 
@@ -826,11 +946,18 @@ export default function OnlineRoomScreen() {
                     </View>
                   </View>
 
+                  {/* PLUS */}
                   <Pressable
-                    style={styles.circleBtn}
+                    style={[
+                      styles.circleBtn,
+                      disablePlus && { opacity: 0.4 },
+                    ]}
+                    disabled={disablePlus}
                     onPress={() => {
-                      playFX("coins_sound");
-                      handlePlus();
+                      if (!disablePlus) {
+                        playFX("coins_sound");
+                        handlePlus();
+                      }
                     }}
                   >
                     <Text style={styles.circleText}>+</Text>
@@ -862,6 +989,13 @@ export default function OnlineRoomScreen() {
                 )}
               </>
             )}
+
+            {/* INFO */}
+         {activeRoom?.code ? (
+  <Text style={styles.reconnectText}>
+    ACTIVE MATCH FOUND... RECONNECTING...
+  </Text>
+) : null}
           </View>
         </Animated.View>
       </View>

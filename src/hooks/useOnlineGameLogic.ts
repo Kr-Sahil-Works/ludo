@@ -1,32 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { moveTokenSteps, findCutTokens } from "@/src/helpers/MoveLogic";
+import { moveTokenSteps } from "@/src/helpers/MoveLogic";
 import { playFX } from "@/src/utils/sound";
 
 type Props = {
-  roomCode: string;
-  userId: string;
-
-  room: any; // convex room doc
-  players: any[]; // roomPlayers list
-
-  triggerFirework: () => void;
-  triggerTrophy: () => void;
+  roomCode?: string;
+  userId?: string;
+  room?: any;
+  players?: any[];
+  triggerFirework?: () => void;
+  triggerTrophy?: () => void;
 };
 
 export function useOnlineGameLogic({
   roomCode,
   userId,
   room,
-  players,
   triggerFirework,
   triggerTrophy,
 }: Props) {
+  // ✅ ALWAYS call hooks
   const rollDiceOnline = useMutation(api.rooms.rollDiceOnline);
   const moveTokenOnline = useMutation(api.rooms.moveTokenOnline);
-
-  const safePositions = [1, 9, 14, 22, 27, 35, 40, 48];
 
   const [canRollDice, setCanRollDice] = useState(true);
   const [toastMessage, setToastMessage] = useState("");
@@ -34,74 +30,98 @@ export function useOnlineGameLogic({
 
   const movingRef = useRef(false);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(""), 1400);
-  };
-
-  const gameState = room?.gameState;
+  const gameState = room?.gameState ?? null;
+  const playersState = gameState?.players ?? [];
 
   const currentPlayerIndex = gameState?.currentPlayerIndex ?? 0;
   const diceValue = gameState?.diceValue ?? 0;
   const winnerId = gameState?.winnerId ?? null;
 
+  // ✅ find my index
   const myIndex = useMemo(() => {
-    if (!gameState?.players) return -1;
-    return gameState.players.findIndex((p: any) => p.userId === userId);
-  }, [gameState?.players, userId]);
+    if (!userId || playersState.length === 0) return -1;
+    return playersState.findIndex((p: any) => p.userId === userId);
+  }, [playersState, userId]);
 
-  const isMyTurn = myIndex === currentPlayerIndex;
+  const isMyTurn =
+    myIndex !== -1 && myIndex === currentPlayerIndex && !winnerId;
 
-  const movableTokens = useMemo(() => {
-    if (!gameState?.players) return [];
-    if (!diceValue) return [];
-    if (winnerId) return [];
+  // ✅ movable tokens (COLOR BASED FIX)
+type TokenInfo = {
+  pos: number;
+  idx: number;
+};
 
-    const me = gameState.players[currentPlayerIndex];
-    if (!me) return [];
+const movableTokens = useMemo(() => {
+  if (!isMyTurn) return [];
+  if (!diceValue) return [];
+  if (myIndex === -1) return [];
 
-    return me.tokens
-      .map((pos: number, idx: number) => ({ pos, idx }))
-      .filter((t: any) => {
-        const steps = moveTokenSteps(currentPlayerIndex, t.pos, diceValue);
-        return steps.length > 0;
-      })
-      .map((t: any) => t.idx);
-  }, [gameState?.players, currentPlayerIndex, diceValue, winnerId]);
+  const me = playersState[myIndex];
+  if (!me) return [];
 
-  // keep local cutting animation sync
+  return me.tokens
+    .map((pos: number, idx: number): TokenInfo => ({
+      pos,
+      idx,
+    }))
+    .filter((t: TokenInfo) => {
+      const steps = moveTokenSteps(me, t.pos, diceValue);
+      return steps.length > 0;
+    })
+    .map((t: TokenInfo) => t.idx);
+}, [playersState, myIndex, diceValue, isMyTurn]);
+
+
+  // sync cutting animation
   useEffect(() => {
     if (gameState?.cuttingTokenKey) {
       setCuttingTokenKey(gameState.cuttingTokenKey);
-      return;
+    } else {
+      setCuttingTokenKey(null);
     }
-    setCuttingTokenKey(null);
   }, [gameState?.cuttingTokenKey]);
 
-  // enable roll when dice resets
-  useEffect(() => {
-    if (diceValue === 0) {
-      setCanRollDice(true);
-      movingRef.current = false;
-    }
-  }, [diceValue]);
+  // reset roll when dice clears
+ useEffect(() => {
+  // whenever turn changes OR dice resets
+  if (!isMyTurn) {
+    setCanRollDice(false);
+    return;
+  }
+
+  if (diceValue === 0) {
+    setCanRollDice(true);
+    movingRef.current = false;
+  }
+}, [diceValue, isMyTurn]);
+
+useEffect(() => {
+  if (!isMyTurn) {
+    movingRef.current = false;
+  }
+}, [isMyTurn]);
+
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 1400);
+  };
+
+  // ---------------- ROLL ----------------
 
   const roll = useCallback(async () => {
+    if (!roomCode || !userId) return;
+    if (!gameState) return;
+    if (!isMyTurn) {
+      showToast("Not your turn");
+      return;
+    }
+    if (!canRollDice) return;
+    if (diceValue !== 0) return;
+
     try {
-      if (!roomCode) return;
-      if (!gameState) return;
-      if (winnerId) return;
-
-      if (!isMyTurn) {
-        showToast("Not your turn!");
-        return;
-      }
-
-      if (!canRollDice) return;
-      if (diceValue !== 0) return;
-
       setCanRollDice(false);
-
       playFX("dice_roll");
 
       await rollDiceOnline({
@@ -112,28 +132,34 @@ export function useOnlineGameLogic({
       console.log("ROLL ERROR:", err?.message);
       setCanRollDice(true);
     }
-  }, [roomCode, userId, isMyTurn, canRollDice, diceValue, gameState, winnerId]);
+  }, [
+    roomCode,
+    userId,
+    gameState,
+    isMyTurn,
+    canRollDice,
+    diceValue,
+    rollDiceOnline,
+  ]);
+
+  // ---------------- MOVE ----------------
 
   const moveSelectedToken = useCallback(
     async (tokenIndex: number) => {
+      if (!roomCode || !userId) return;
+      if (!gameState) return;
+      if (!isMyTurn) {
+        showToast("Not your turn");
+        return;
+      }
+      if (!diceValue) return;
+      if (!movableTokens.includes(tokenIndex)) return;
+      if (movingRef.current) return;
+
       try {
-        if (!roomCode) return;
-        if (!gameState) return;
-        if (winnerId) return;
-        if (movingRef.current) return;
-
-        if (!isMyTurn) {
-          showToast("Not your turn!");
-          return;
-        }
-
-        if (!diceValue) return;
-        if (!movableTokens.includes(tokenIndex)) return;
-
         movingRef.current = true;
         setCanRollDice(false);
 
-        // 🔥 play local movement sound
         playFX("pileMove");
 
         await moveTokenOnline({
@@ -149,49 +175,50 @@ export function useOnlineGameLogic({
         setCanRollDice(true);
       }
     },
-    [roomCode, userId, gameState, winnerId, isMyTurn, diceValue, movableTokens]
-  );
-
-  const onTokenPress = useCallback(
-    (playerIndex: number, tokenIndex: number) => {
-      if (!gameState) return;
-      if (winnerId) return;
-
-      if (playerIndex !== currentPlayerIndex) return;
-      if (!diceValue) return;
-      if (!isMyTurn) return;
-
-      moveSelectedToken(tokenIndex);
-    },
     [
+      roomCode,
+      userId,
       gameState,
-      winnerId,
-      currentPlayerIndex,
-      diceValue,
       isMyTurn,
-      moveSelectedToken,
+      diceValue,
+      movableTokens,
+      moveTokenOnline,
     ]
   );
 
-  // win animations trigger
+  // only allow my tokens
+  const onTokenPress = useCallback(
+    (playerIndex: number, tokenIndex: number) => {
+      if (!isMyTurn) return;
+      if (!diceValue) return;
+      if (playerIndex !== myIndex) return;
+
+      moveSelectedToken(tokenIndex);
+    },
+    [isMyTurn, diceValue, myIndex, moveSelectedToken]
+  );
+
+  // win animation
   useEffect(() => {
-    if (!winnerId) return;
+    if (!winnerId || !userId) return;
+
     if (winnerId === userId) {
-      triggerTrophy();
+      triggerTrophy?.();
+    } else {
+      triggerFirework?.();
     }
-  }, [winnerId]);
+  }, [winnerId, userId, triggerTrophy, triggerFirework]);
 
   return {
-  roll,
-  onTokenPress,
-  canRollDice,
-  movableTokens,
-  toastMessage,
-  diceValue,
-  currentPlayerIndex,
-  cuttingTokenKey,
-  winnerId,
-  isMyTurn
-}
-
+    roll,
+    onTokenPress,
+    canRollDice,
+    movableTokens,
+    toastMessage,
+    diceValue,
+    currentPlayerIndex,
+    cuttingTokenKey,
+    winnerId,
+    isMyTurn,
+  };
 }

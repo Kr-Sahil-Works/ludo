@@ -29,18 +29,42 @@ export default function LoginScreen() {
 
       console.log("REDIRECT URL:", redirectUrl);
 
-      const { createdSessionId, setActive } = await startOAuthFlow({
+      const result = await startOAuthFlow({
         redirectUrl,
       });
 
-      if (createdSessionId) {
-        await setActive?.({ session: createdSessionId });
-        router.replace("/(tabs)");
-      } else {
-        Alert.alert("Login Failed", "No session created.");
+      console.log("OAUTH RESULT:", result);
+
+      const createdSessionId = result?.createdSessionId;
+      const setActive = result?.setActive;
+
+      // user cancelled login or no session created
+      if (!createdSessionId) {
+        console.log("Google login cancelled or no session created.");
+        Alert.alert("Login Failed", "Google login cancelled or failed.");
+        return;
       }
-    } catch (err) {
+
+      if (!setActive) {
+        console.log("Google login error: setActive is missing.");
+        Alert.alert("Login Error", "setActive missing from Clerk OAuth.");
+        return;
+      }
+
+      await setActive({ session: createdSessionId });
+
+      router.replace("/(tabs)");
+    } catch (err: any) {
       console.log("Google login error FULL:", err);
+
+      const msg = String(err?.message || err || "");
+
+      if (msg.toLowerCase().includes("already signed in")) {
+        Alert.alert("Already Logged In", "You are already signed in.");
+        router.replace("/(tabs)");
+        return;
+      }
+
       Alert.alert("Login Error", "Google login failed. Check console.");
     } finally {
       setLoading(false);

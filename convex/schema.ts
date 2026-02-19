@@ -48,7 +48,13 @@ export default defineSchema({
     code: v.string(),
     hostId: v.string(),
 
-    status: v.string(), // "waiting" | "playing" | "ended" | "abandoned"
+   status: v.union(
+  v.literal("waiting"),
+  v.literal("playing"),
+  v.literal("ended"),
+  v.literal("abandoned")
+)
+,
 
     maxPlayers: v.number(),
     playersCount: v.number(),
@@ -75,12 +81,15 @@ minPlayersToStart: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_code", ["code"]),
 
-  roomPlayers: defineTable({
-    roomId: v.id("rooms"),
-    userId: v.string(),
-    name: v.string(),
-    joinedAt: v.number(),
-  }).index("by_room", ["roomId"]),
+ roomPlayers: defineTable({
+  roomId: v.id("rooms"),
+  userId: v.string(),
+  name: v.string(),
+  joinedAt: v.number(),
+})
+  .index("by_room", ["roomId"])
+  .index("by_user", ["userId"]),
+
 
   // finished match history
   matches: defineTable({

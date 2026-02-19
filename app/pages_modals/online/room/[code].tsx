@@ -33,11 +33,12 @@ export default function RoomLobby() {
   const [joinToast, setJoinToast] = useState("");
   const prevCountRef = useRef(0);
 
+  const redirectedRef = useRef(false);
+
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
   const roomCode = String(code || "").toUpperCase();
-
   const userId = user?.id || "";
 
   const data = useQuery(
@@ -359,12 +360,20 @@ export default function RoomLobby() {
     });
   }, [width]);
 
-  // ✅ AUTO REDIRECT WHEN GAME STARTS
+  // ✅ AUTO REDIRECT WHEN GAME STARTS (SAFE)
   useEffect(() => {
-    if (data?.room?.status === "playing") {
-      router.replace(`/pages_modals/online/game/${data.room.code}` as any);
+    if (!data?.room?.status) return;
+    if (!data?.room?.code) return;
+
+    if (data.room.status === "playing" && !redirectedRef.current) {
+      redirectedRef.current = true;
+
+      router.replace({
+        pathname: "/pages_modals/online/game/[code]",
+        params: { code: data.room.code },
+      });
     }
-  }, [data?.room?.status]);
+  }, [data?.room?.status, data?.room?.code]);
 
   // ✅ PLAYER JOIN TOAST
   useEffect(() => {
@@ -439,6 +448,26 @@ export default function RoomLobby() {
 
   const { room, players, hostUser, playerUsers } = data;
 
+  // ✅ IMPORTANT FIX: always trust playersCount
+  const totalSlots =
+    typeof room.playersCount === "number" && room.playersCount > 0
+      ? room.playersCount
+      : room.maxPlayers;
+
+  const isHost = room.hostId === userId;
+
+  const sortedPlayers = [...players].sort(
+    (a: any, b: any) => a.joinedAt - b.joinedAt
+  );
+
+  const canStart = sortedPlayers.length >= totalSlots;
+
+  const hostPlayer = sortedPlayers[0];
+
+  const slots = Array.from({ length: totalSlots - 1 }).map(
+    (_, i) => sortedPlayers[i + 1] || null
+  );
+
   const handleCopy = async () => {
     await Clipboard.setStringAsync(room.code);
     setShowCopied(true);
@@ -447,9 +476,7 @@ export default function RoomLobby() {
 
   const shareText = `Join my Ludo Room!\nRoom Code: ${room.code}\nMode: ${
     room.mode === "classic" ? "Classic" : "Quick"
-  }\nPlayers: ${room.playersCount || room.maxPlayers}P\nEntry: ${
-    room.entryCoins || 100
-  }`;
+  }\nPlayers: ${totalSlots}P\nEntry: ${room.entryCoins || 100}`;
 
   const handleShare = async () => {
     try {
@@ -483,7 +510,7 @@ export default function RoomLobby() {
   };
 
   const showWaitingToast = () => {
-    setJoinToast("PLAYER SLOT IS EMPTY!");
+    setJoinToast("WAITING FOR PLAYERS!");
 
     setTimeout(() => {
       setJoinToast("");
@@ -497,21 +524,6 @@ export default function RoomLobby() {
       console.log("START GAME ERROR:", err?.message);
     }
   };
-
-  const isHost = room.hostId === userId;
-
-  const sortedPlayers = [...players].sort(
-    (a: any, b: any) => a.joinedAt - b.joinedAt
-  );
-
-  const totalSlots = room.playersCount || room.maxPlayers;
-  const canStart = sortedPlayers.length >= totalSlots;
-
-  const hostPlayer = sortedPlayers[0];
-
-  const slots = Array.from({ length: totalSlots - 1 }).map(
-    (_, i) => sortedPlayers[i + 1] || null
-  );
 
   const findUser = (uid: string) => {
     return playerUsers?.find((u: any) => u.userId === uid);

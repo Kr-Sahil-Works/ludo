@@ -20,17 +20,26 @@ import ComingSoonModal from "@/app/pages_modals/1home/ComingSoonModal";
 import HomeLoader from "@/src/components/Loaders/HomeLoader";
 
 import { playBG, playFX, stopBG } from "@/src/utils/sound";
-import GameHeader from "@/app/pages_modals/1home/GameHeader";
 
-import { setHomeLoading } from "@/src/redux/uiSlice";
-import SpinWheelModal from "@/app/pages_modals/1home/SpinWheelModal";
-import SelectPersonTokenModal from "@/app/pages_modals/2passNplay/SelectPersonTokenModal";
+import {
+  loadMusicSetting,
+  loadSfxSetting,
+  isMusicEnabled,
+} from "@/src/utils/appSettings";
+
+import GameHeader from "@/app/pages_modals/1home/GameHeader";
 import OfflineHeader from "@/app/pages_modals/1home/OfflineHeader";
 
+import { setHomeLoading } from "@/src/redux/uiSlice";
+
+import SpinWheelModal from "@/app/pages_modals/1home/SpinWheelModal";
+import SelectPersonTokenModal from "@/app/pages_modals/2passNplay/SelectPersonTokenModal";
 import ModeCard from "@/app/pages_modals/1home/ModeCard";
 
 import { useUser } from "@clerk/clerk-expo";
 import PassNPlayModal from "@/app/pages_modals/2passNplay/PassNPlayModal";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 import OfflineToast from "@/app/pages_modals/1home/OfflineToast";
 
@@ -69,6 +78,13 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const { isSignedIn } = useUser();
+  const { user } = useUser();
+
+const activeRoom = useQuery(
+  api.rooms.getMyActiveRoom,
+  user?.id ? { userId: user.id } : "skip"
+);
+
 
   useEffect(() => {
     dispatch(setHomeLoading(true));
@@ -96,12 +112,12 @@ export default function HomeScreen() {
   const spinBounce = useRef(new Animated.Value(1)).current;
   const headerFade = useRef(new Animated.Value(0)).current;
 
-
   const showOfflineDialog = () => {
     setShowOfflineToast(true);
     setTimeout(() => setShowOfflineToast(false), 2200);
   };
 
+  // SPIN BOUNCE LOOP
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
@@ -232,22 +248,30 @@ export default function HomeScreen() {
     return () => animation.stop();
   }, []);
 
+  // HEADER FADE
   useEffect(() => {
-  Animated.timing(headerFade, {
-    toValue: onlineReady ? 1 : 0,
-    duration: 350,
-    useNativeDriver: true,
-  }).start();
-}, [onlineReady]);
+    Animated.timing(headerFade, {
+      toValue: onlineReady ? 1 : 0,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, [onlineReady]);
 
   // HOME MUSIC
   useEffect(() => {
-    if (!loading && isFocused) {
-      playBG("home");
-    } else {
-      stopBG();
+    async function initAudio() {
+      await loadMusicSetting();
+      await loadSfxSetting();
+
+      if (isMusicEnabled()) {
+        playBG("home", true);
+      } else {
+        stopBG(false);
+      }
     }
-  }, [isFocused, loading]);
+
+    initAudio();
+  }, []);
 
   const startGame = async (isNew = false) => {
     stopBG();
@@ -278,63 +302,81 @@ export default function HomeScreen() {
     setShowComingSoon(true);
   };
 
-  const openOnlineMode = () => {
-    if (!isSignedIn) {
-      router.push("/auth/login");
+ const openOnlineMode = () => {
+  if (!isSignedIn) {
+    router.push("/auth/login");
+    return;
+  }
+
+  if (!isConnected) {
+    showOfflineDialog();
+    return;
+  }
+
+  // ✅ if active room exists, directly reconnect
+  if (activeRoom?.code) {
+    if (activeRoom.status === "waiting") {
+      router.push({
+        pathname: "/pages_modals/online/room/[code]",
+        params: { code: activeRoom.code },
+      });
       return;
     }
 
-    if (!isConnected) {
-      showOfflineDialog();
+    if (activeRoom.status === "playing") {
+      router.push({
+        pathname: "/pages_modals/online/game/[code]",
+        params: { code: activeRoom.code },
+      });
       return;
     }
+  }
 
-    router.push("/pages_modals/online/OnlineRoomScreen");
-  };
+  router.push("/pages_modals/online/OnlineRoomScreen");
+};
+
 
   return loading ? (
     <HomeLoader />
   ) : (
     <View style={{ flex: 1 }}>
       {/* HEADER */}
-<View
-  pointerEvents="box-none"
-  style={{
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 9999,
-  }}
->
-  <Animated.View
-    pointerEvents={onlineReady ? "auto" : "none"}
-    style={{
-      opacity: onlineReady ? 1 : 0,
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-    }}
-  >
-    <GameHeader />
-  </Animated.View>
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 9999,
+        }}
+      >
+        <Animated.View
+          pointerEvents={onlineReady ? "auto" : "none"}
+          style={{
+            opacity: onlineReady ? 1 : 0,
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+          }}
+        >
+          <GameHeader />
+        </Animated.View>
 
-  <Animated.View
-    pointerEvents={onlineReady ? "none" : "auto"}
-    style={{
-      opacity: onlineReady ? 0 : 1,
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-    }}
-  >
-    <OfflineHeader />
-  </Animated.View>
-</View>
-
-
+        <Animated.View
+          pointerEvents={onlineReady ? "none" : "auto"}
+          style={{
+            opacity: onlineReady ? 0 : 1,
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+          }}
+        >
+          <OfflineHeader />
+        </Animated.View>
+      </View>
 
       {/* WHOLE SCREEN */}
       <View style={{ flex: 1 }}>
@@ -363,70 +405,77 @@ export default function HomeScreen() {
 
         {/* UI DOES NOT SCALE */}
         <View style={{ flex: 1 }}>
-          {/* SPIN BUTTON LEFT */}
-          {onlineReady && (
-            <Pressable
-              style={styles.spinBtn}
-              onPress={() => {
-                playFX("ui");
-                setShowSpin(true);
-              }}
-            >
-              <Animated.Image
-                source={SpinBtn}
+          {/* TOP ROW (SPIN + LOGO) */}
+          <View style={styles.topRow}>
+            {/* LEFT SLOT */}
+            <View style={styles.sideSlot}>
+              {onlineReady && (
+                <Pressable
+                  style={styles.spinBtn}
+                  onPress={() => {
+                    playFX("ui");
+                    setShowSpin(true);
+                  }}
+                >
+                  <Animated.Image
+                    source={SpinBtn}
+                    style={[
+                      styles.spinImg,
+                      {
+                        transform: [{ scale: spinBounce }],
+                      },
+                    ]}
+                  />
+                </Pressable>
+              )}
+            </View>
+
+            {/* CENTER LOGO */}
+            <View style={styles.centerSlot}>
+              <Animated.View
                 style={[
-                  styles.spinImg,
+                  styles.logoGlowLayer,
                   {
-                    transform: [{ scale: spinBounce }],
+                    opacity: glowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.15, 0.65],
+                    }),
+                    transform: [
+                      {
+                        scale: glowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.12],
+                        }),
+                      },
+                    ],
                   },
                 ]}
               />
-            </Pressable>
-          )}
 
-          {/* LOGO */}
-          <View style={styles.imgContainer}>
-            <Animated.View
-              style={[
-                styles.logoGlowLayer,
-                {
-                  opacity: glowAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.15, 0.65],
-                  }),
-                  transform: [
-                    {
-                      scale: glowAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1, 1.12],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
+              <Animated.Image
+                source={Logo}
+                style={[
+                  styles.logoImg,
+                  {
+                    transform: [
+                      {
+                        scale: glowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1.06, 1],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </View>
 
-            <Animated.Image
-              source={Logo}
-              style={[
-                styles.img,
-                {
-                  transform: [
-                    {
-                      scale: glowAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1.06, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
+            {/* RIGHT SLOT EMPTY */}
+            <View style={styles.sideSlot} />
           </View>
 
           {/* BUTTON GRID */}
           <View style={styles.modeGrid}>
-            {/* RESUME OR PASS N PLAY */}
             {hasGameStarted ? (
               <ModeCard
                 title="Resume"
@@ -447,7 +496,6 @@ export default function HomeScreen() {
               />
             )}
 
-            {/* COMPUTER */}
             <ModeCard
               title="Computer"
               subtitle="Coming soon"
@@ -456,7 +504,6 @@ export default function HomeScreen() {
               onPress={() => setShowComingSoon(true)}
             />
 
-            {/* ONLINE */}
             <ModeCard
               title="Online"
               subtitle="Play with friends"
@@ -465,7 +512,6 @@ export default function HomeScreen() {
               onPress={openOnlineMode}
             />
 
-            {/* SNAKE */}
             <ModeCard
               title="Snake Ladder"
               subtitle="Coming soon"
@@ -560,23 +606,45 @@ export default function HomeScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
-  imgContainer: {
-    width: "70%",
-    height: 180,
+  topRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    marginTop: 95,
+  },
+
+  sideSlot: {
+    width: 90,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  spinBtn: {
+    width: 85,
+    height: 85,
     justifyContent: "center",
     alignItems: "center",
-    alignSelf: "center",
-    marginTop: 60,
-    marginBottom: 18,
+  },
+
+  spinImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
+  },
+
+  centerSlot: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   logoGlowLayer: {
-    marginTop: 40,
     position: "absolute",
-    width: "75%",
-    height: "75%",
+    width: 140,
+    height: 140,
     borderRadius: 999,
     backgroundColor: "#020d462b",
     shadowColor: "#020116",
@@ -585,11 +653,11 @@ const styles = StyleSheet.create({
     elevation: 35,
   },
 
-  img: {
-    width: "110%",
-    height: "110%",
+  logoImg: {
+    marginTop:-25,
+    width: 210,
+    height: 150,
     resizeMode: "contain",
-    zIndex: 5,
   },
 
   modeGrid: {
@@ -615,23 +683,5 @@ const styles = StyleSheet.create({
     height: 210,
     width: 210,
     transform: [{ rotate: "25deg" }],
-  },
-
-  spinBtn: {
-    position: "absolute",
-    left: 12,
-    top: 110,
-    width: 90,
-    height: 90,
-    zIndex: 9999,
-    elevation: 9999,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  spinImg: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "contain",
   },
 });

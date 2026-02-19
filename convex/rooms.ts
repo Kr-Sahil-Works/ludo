@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-import { moveTokenSteps, findCutTokens } from "./gameLogic/moveLogic";
+import { moveTokenSteps, findCutTokens, getVictoryIdByColor } from "./gameLogic/moveLogic";
 
 function generateRoomCode() {
   const chars = "0123456789";
@@ -75,7 +75,7 @@ export const createRoom = mutation({
   },
 });
 
-// JOIN ROOM
+// JOIN ROOM (ALSO SUPPORTS RECONNECT)
 export const joinRoom = mutation({
   args: {
     code: v.string(),
@@ -92,15 +92,24 @@ export const joinRoom = mutation({
       .first();
 
     if (!room) throw new Error("Room not found");
-    if (room.status !== "waiting") throw new Error("Game already started");
 
-    const expired = Date.now() - room.createdAt > 15 * 60 * 1000;
-    if (expired) {
-      await ctx.db.patch(room._id, {
-        status: "abandoned",
-        endedAt: Date.now(),
-      });
-      throw new Error("Room expired");
+    // cannot join ended/abandoned rooms
+    if (room.status === "abandoned" || room.status === "ended") {
+      throw new Error("Room ended");
+    }
+
+    // expiry ONLY for waiting rooms
+    if (room.status === "waiting") {
+      const expired = Date.now() - room.createdAt > 15 * 60 * 1000;
+
+      if (expired) {
+        await ctx.db.patch(room._id, {
+          status: "abandoned",
+          endedAt: Date.now(),
+        });
+
+        throw new Error("Room expired");
+      }
     }
 
     const players = await ctx.db
@@ -108,10 +117,18 @@ export const joinRoom = mutation({
       .withIndex("by_room", (q) => q.eq("roomId", room._id))
       .collect();
 
-    if (players.length >= room.maxPlayers) throw new Error("Room is full");
-
+    // if already joined, just return roomId (reconnect)
     const alreadyJoined = players.find((p) => p.userId === args.userId);
-    if (alreadyJoined) return { roomId: room._id };
+    if (alreadyJoined) {
+      return { roomId: room._id };
+    }
+
+    // ✅ IMPORTANT FIX: FULL CHECK SHOULD USE playersCount (NOT maxPlayers)
+    const limit = room.playersCount || room.maxPlayers;
+
+    if (players.length >= limit) {
+      throw new Error("Room is full");
+    }
 
     await ctx.db.insert("roomPlayers", {
       roomId: room._id,
@@ -123,6 +140,7 @@ export const joinRoom = mutation({
     return { roomId: room._id };
   },
 });
+
 
 // GET ROOM DETAILS
 export const getRoom = query({
@@ -188,8 +206,25 @@ export const startGame = mutation({
       .first();
 
     if (!room) throw new Error("Room not found");
-    if (room.hostId !== args.userId) throw new Error("Only host can start");
-    if (room.status !== "waiting") throw new Error("Room already started");
+
+    // only host can start
+    if (room.hostId !== args.userId) {
+      throw new Error("Only host can start");
+    }
+
+    // ended/abandoned rooms cannot start
+    if (room.status === "ended" || room.status === "abandoned") {
+      throw new Error("Room ended");
+    }
+
+    // already started -> return safely
+    if (room.status === "playing" && room.gameState) {
+      return true;
+    }
+
+    if (room.status !== "waiting") {
+      return true;
+    }
 
     const players = await ctx.db
       .query("roomPlayers")
@@ -198,17 +233,26 @@ export const startGame = mutation({
 
     players.sort((a, b) => a.joinedAt - b.joinedAt);
 
-    if (players.length < room.playersCount) {
+    // ✅ IMPORTANT FIX: playersCount is required count
+    const neededPlayers = room.playersCount || room.maxPlayers;
+
+    if (players.length < neededPlayers) {
       throw new Error("Not enough players");
     }
 
-    const initialPlayers = players.map((p, index) => ({
-      userId: p.userId,
-      name: p.name,
-      tokens: [0, 0, 0, 0],
-      killCount: 0,
-      color: room.tokenColors[index] ?? "red",
-    }));
+    const selectedPlayers = players.slice(0, neededPlayers);
+
+const usedColors = room.tokenColors.slice(0, neededPlayers);
+
+const initialPlayers = selectedPlayers.map((p, index) => ({
+  userId: p.userId,
+  name: p.name,
+  tokens: [0, 0, 0, 0],
+  killCount: 0,
+  color: usedColors[index],
+}));
+
+
 
     const gameState = {
       players: initialPlayers,
@@ -223,7 +267,7 @@ export const startGame = mutation({
     await ctx.db.patch(room._id, {
       status: "playing",
       startedAt: Date.now(),
-      turnUserId: players[0].userId,
+      turnUserId: selectedPlayers[0].userId,
       currentDice: 0,
       gameState,
     });
@@ -231,6 +275,8 @@ export const startGame = mutation({
     return true;
   },
 });
+
+
 
 // ROLL DICE
 export const rollDiceOnline = mutation({
@@ -247,35 +293,33 @@ export const rollDiceOnline = mutation({
       .withIndex("by_code", (q) => q.eq("code", roomCode))
       .first();
 
-    if (!room) throw new Error("Room not found");
-    if (room.status !== "playing") throw new Error("Game not playing");
-    if (!room.gameState) throw new Error("Game state missing");
+    if (!room || !room.gameState)
+      throw new Error("Room invalid");
 
     const state = room.gameState;
 
-    const currentPlayer = state.players[state.currentPlayerIndex];
-    if (!currentPlayer) throw new Error("Current player not found");
+    const currentIndex = state.currentPlayerIndex;
+    const currentPlayer = state.players[currentIndex];
 
-    if (currentPlayer.userId !== args.userId) {
+    if (currentPlayer.userId !== args.userId)
       throw new Error("Not your turn");
-    }
 
-    if (state.diceValue !== 0) {
+    if (state.diceValue !== 0)
       throw new Error("Dice already rolled");
-    }
 
     const dice = Math.floor(Math.random() * 6) + 1;
 
     let sixStreak = state.sixStreak ?? 0;
-    if (dice === 6) sixStreak++;
-    else sixStreak = 0;
+    sixStreak = dice === 6 ? sixStreak + 1 : 0;
 
+    const nextIndex =
+      (currentIndex + 1) % state.players.length;
+
+    // 🔴 3 consecutive six → force pass
     if (sixStreak >= 3) {
-      const nextIndex = (state.currentPlayerIndex + 1) % state.players.length;
-
       await ctx.db.patch(room._id, {
         gameState: {
-          ...state,
+          ...room.gameState,
           diceValue: 0,
           currentPlayerIndex: nextIndex,
           sixStreak: 0,
@@ -288,9 +332,33 @@ export const rollDiceOnline = mutation({
       return { dice: 0, skipped: true };
     }
 
+    // 🔎 Check if any token can move
+   const hasMove = currentPlayer.tokens.some((tokenPos: number) => {
+  const steps = moveTokenSteps(currentPlayer, tokenPos, dice);
+  return steps.length > 0;
+});
+
+
+    if (!hasMove) {
+      await ctx.db.patch(room._id, {
+        gameState: {
+          ...room.gameState,
+          diceValue: 0,
+          currentPlayerIndex: nextIndex,
+          sixStreak: 0,
+          updatedAt: Date.now(),
+        },
+        turnUserId: state.players[nextIndex].userId,
+        currentDice: 0,
+      });
+
+      return { dice, skipped: true };
+    }
+
+    // ✅ Normal roll
     await ctx.db.patch(room._id, {
       gameState: {
-        ...state,
+        ...room.gameState,
         diceValue: dice,
         sixStreak,
         updatedAt: Date.now(),
@@ -301,6 +369,9 @@ export const rollDiceOnline = mutation({
     return { dice };
   },
 });
+
+
+
 
 // MOVE TOKEN
 export const moveTokenOnline = mutation({
@@ -324,7 +395,9 @@ export const moveTokenOnline = mutation({
 
     const state = room.gameState;
 
-    const currentPlayer = state.players[state.currentPlayerIndex];
+    const currentPlayerIndex = state.currentPlayerIndex;
+    const currentPlayer = state.players[currentPlayerIndex];
+
     if (!currentPlayer) throw new Error("Current player not found");
 
     if (currentPlayer.userId !== args.userId) {
@@ -339,7 +412,8 @@ export const moveTokenOnline = mutation({
     const tokenPos = currentPlayer.tokens[args.tokenIndex];
     if (tokenPos === undefined) throw new Error("Invalid token");
 
-    const steps = moveTokenSteps(state.currentPlayerIndex, tokenPos, diceValue);
+    // ✅ COLOR BASED MOVEMENT
+    const steps = moveTokenSteps(currentPlayer, tokenPos, diceValue);
 
     if (steps.length === 0) {
       throw new Error("Invalid move");
@@ -354,9 +428,10 @@ export const moveTokenOnline = mutation({
     newTokens[args.tokenIndex] = finalPos;
     updatedPlayer.tokens = newTokens;
 
-    newPlayers[state.currentPlayerIndex] = updatedPlayer;
+    newPlayers[currentPlayerIndex] = updatedPlayer;
 
-    const cuts = findCutTokens(newPlayers, state.currentPlayerIndex, finalPos);
+    // ✅ CUT LOGIC
+    const cuts = findCutTokens(newPlayers, currentPlayerIndex, finalPos);
 
     let cuttingTokenKey: string | null = null;
 
@@ -372,10 +447,13 @@ export const moveTokenOnline = mutation({
       newPlayers[cut.playerIndex] = cutPlayer;
     }
 
+    // ✅ WIN CHECK (COLOR BASED)
     const neededToWin = room.mode === "quick" ? 2 : 4;
 
+    const victoryId = getVictoryIdByColor(currentPlayer.color);
+
     const victoryCount = updatedPlayer.tokens.filter(
-      (p: number) => p >= 100 && p % 100 === 6
+      (p: number) => p === victoryId
     ).length;
 
     let winnerId: string | null = state.winnerId ?? null;
@@ -384,10 +462,11 @@ export const moveTokenOnline = mutation({
       winnerId = updatedPlayer.userId;
     }
 
-    let nextPlayerIndex = state.currentPlayerIndex;
+    let nextPlayerIndex = currentPlayerIndex;
 
-    if (diceValue !== 6 && cuts.length === 0) {
-      nextPlayerIndex = (state.currentPlayerIndex + 1) % newPlayers.length;
+    // if no 6 and no cut → next player
+    if (diceValue !== 6 && cuts.length === 0 && !winnerId) {
+      nextPlayerIndex = (currentPlayerIndex + 1) % newPlayers.length;
     }
 
     await ctx.db.patch(room._id, {
@@ -400,7 +479,7 @@ export const moveTokenOnline = mutation({
         cuttingTokenKey,
         updatedAt: Date.now(),
       },
-      turnUserId: newPlayers[nextPlayerIndex].userId,
+      turnUserId: newPlayers[nextPlayerIndex]?.userId ?? null,
       currentDice: 0,
     });
 
@@ -408,7 +487,8 @@ export const moveTokenOnline = mutation({
   },
 });
 
-// AUTO ABANDON
+
+// AUTO ABANDON (ONLY WAITING ROOMS)
 export const abandonRoomIfExpired = mutation({
   args: { code: v.string() },
 
@@ -432,5 +512,56 @@ export const abandonRoomIfExpired = mutation({
     });
 
     return true;
+  },
+});
+
+// GET MY ACTIVE ROOM (RECONNECT FEATURE)
+export const getMyActiveRoom = query({
+  args: {
+    userId: v.string(),
+  },
+
+  handler: async (ctx, args) => {
+    const myRooms = await ctx.db
+      .query("roomPlayers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    if (!myRooms.length) return null;
+
+    // newest joined first
+    myRooms.sort((a, b) => b.joinedAt - a.joinedAt);
+
+    for (const rp of myRooms) {
+      const room = await ctx.db.get(rp.roomId);
+      if (!room) continue;
+
+      // skip ended rooms
+      if (room.status === "abandoned") continue;
+      if (room.status === "ended") continue;
+
+      // waiting lobby reconnect (only if not expired)
+      if (room.status === "waiting") {
+        const expired = Date.now() - room.createdAt > 15 * 60 * 1000;
+        if (expired) continue;
+
+        return {
+          code: room.code,
+          status: room.status,
+          roomId: room._id,
+        };
+      }
+
+      // playing reconnect (even if winner exists you can still view game)
+    if (room.status === "playing" && room.gameState) {
+        return {
+          code: room.code,
+          status: room.status,
+          roomId: room._id,
+        };
+      }
+    }
+
+    return null;
   },
 });

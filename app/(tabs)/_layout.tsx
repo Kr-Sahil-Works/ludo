@@ -1,52 +1,78 @@
-import React, { useRef } from "react";
-import { Tabs, Redirect } from "expo-router";
+import React, { useRef, useEffect } from "react";
+import { Tabs } from "expo-router";
 import {
   Image,
   StyleSheet,
   View,
   Pressable,
   Animated,
-  Vibration,
   ActivityIndicator,
+  Vibration,
+  Platform,
+    Easing,
 } from "react-native";
 
+import { LinearGradient } from "expo-linear-gradient";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/src/redux/store";
-
 import { useUser } from "@clerk/clerk-expo";
 
+// ICONS
 const HomeIcon = require("@/src/assets/icons/home.png");
 const InventoryIcon = require("@/src/assets/icons/inventory.png");
 const SocialIcon = require("@/src/assets/icons/social.png");
 const SettingsIcon = require("@/src/assets/icons/settings.png");
 
-const TabBarBG = require("@/src/assets/images/tabbar_bg.png");
-
 /* ---------------- TAB BUTTON ---------------- */
-function TabButton(props: any) {
+function TabButton({ children, onPress, accessibilityState }: any) {
+  const focused = accessibilityState?.selected;
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const liftAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
 
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.9,
+useEffect(() => {
+  Animated.parallel([
+    Animated.timing(liftAnim, {
+      toValue: focused ? -8 : 0,
+      duration: 140,
+      easing: Easing.out(Easing.cubic), // ✅ Apple smooth
       useNativeDriver: true,
-      speed: 25,
-      bounciness: 8,
-    }).start();
-  };
+    }),
 
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
+    Animated.timing(glowAnim, {
+      toValue: focused ? 1 : 0,
+      duration: 160,
+      easing: Easing.out(Easing.quad), // ✅ smooth fade
       useNativeDriver: true,
-      speed: 25,
-      bounciness: 8,
-    }).start();
-  };
+    }),
+  ]).start();
+}, [focused]);
+
+
+
+const handlePressIn = () => {
+  Animated.timing(scaleAnim, {
+    toValue: 0.94,
+    duration: 90,
+    easing: Easing.out(Easing.quad),
+    useNativeDriver: true,
+  }).start();
+};
+
+const handlePressOut = () => {
+  Animated.timing(scaleAnim, {
+    toValue: 1,
+    duration: 110,
+    easing: Easing.out(Easing.cubic),
+    useNativeDriver: true,
+  }).start();
+};
+
 
   const handlePress = () => {
-    Vibration.vibrate(15);
-    props.onPress?.();
+    Vibration.vibrate(3);
+    onPress?.();
   };
 
   return (
@@ -56,8 +82,31 @@ function TabButton(props: any) {
       onPressOut={handlePressOut}
       style={styles.tabPressable}
     >
-      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        {props.children}
+      <Animated.View
+        style={{
+          alignItems: "center",
+          transform: [{ translateY: liftAnim }, { scale: scaleAnim }],
+        }}
+      >
+        {children}
+
+        {/* ✅ Glow Underline Effect */}
+        <Animated.View
+          style={[
+            styles.selectedGlow,
+            {
+              opacity: glowAnim,
+              transform: [
+                {
+                  scaleX: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.6, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
       </Animated.View>
     </Pressable>
   );
@@ -66,10 +115,8 @@ function TabButton(props: any) {
 /* ---------------- MAIN TAB LAYOUT ---------------- */
 export default function TabLayout() {
   const homeLoading = useSelector((state: RootState) => state.ui.homeLoading);
+  const { isLoaded } = useUser();
 
-  const { isLoaded, isSignedIn } = useUser();
-
-  // ✅ Wait Clerk
   if (!isLoaded) {
     return (
       <View style={styles.loadingScreen}>
@@ -78,7 +125,6 @@ export default function TabLayout() {
     );
   }
 
-
   return (
     <Tabs
       screenOptions={{
@@ -86,7 +132,7 @@ export default function TabLayout() {
 
         tabBarShowLabel: true,
         tabBarActiveTintColor: "#ffffff",
-        tabBarInactiveTintColor: "rgba(190,200,255,0.7)",
+        tabBarInactiveTintColor: "rgba(190,200,255,0.65)",
 
         tabBarLabelStyle: styles.label,
         tabBarItemStyle: styles.itemStyle,
@@ -96,12 +142,23 @@ export default function TabLayout() {
         tabBarBackground: () =>
           homeLoading ? null : (
             <View style={StyleSheet.absoluteFill}>
-              <View style={styles.darkOverlay} />
-              <Image source={TabBarBG} style={styles.pngBg} />
+              <LinearGradient
+                colors={[
+                  "rgba(15,8,30,0.88)",
+                  "rgba(50,20,100,0.55)",
+                  "rgba(15,8,30,0.88)",
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.glassBg}
+              />
+
+              <View style={styles.glowBorder} />
             </View>
           ),
       }}
     >
+      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
@@ -115,6 +172,7 @@ export default function TabLayout() {
         }}
       />
 
+      {/* INVENTORY */}
       <Tabs.Screen
         name="inventory"
         options={{
@@ -128,6 +186,7 @@ export default function TabLayout() {
         }}
       />
 
+      {/* SOCIAL */}
       <Tabs.Screen
         name="social"
         options={{
@@ -141,6 +200,7 @@ export default function TabLayout() {
         }}
       />
 
+      {/* SETTINGS */}
       <Tabs.Screen
         name="settings"
         options={{
@@ -165,31 +225,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  /* ✅ RESPONSIVE TAB BAR */
   tabBar: {
-    position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 14,
+  position: "absolute",
 
-    height: 86,
-    borderRadius: 30,
-    backgroundColor: "transparent",
-    borderTopWidth: 0,
+  left: 28,
+  right: 28,
+  bottom: Platform.OS === "ios" ? 22 : 14,
 
-    overflow: "hidden",
-    elevation: 30,
-  },
+  height: 72,
+  borderRadius: 22,
 
-  darkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.15)",
-  },
+  backgroundColor: "transparent",
+  borderTopWidth: 0,
 
-  pngBg: {
+  overflow: "hidden",
+  elevation: 30,
+
+  // ✅ extra protection for curved edge screens
+  paddingHorizontal: 6,
+},
+
+
+  glassBg: {
     width: "100%",
     height: "100%",
-    resizeMode: "stretch",
-    opacity: 1,
+    borderRadius: 22,
+  },
+
+  glowBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 22,
+    borderWidth: 1.2,
+    borderColor: "rgba(140, 120, 255, 0.55)",
   },
 
   tabPressable: {
@@ -202,40 +270,38 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-
-    paddingTop: 14,
+    paddingTop: 10,
     paddingBottom: 8,
-
-    minWidth: 80,
+    minWidth: 65,
   },
 
   label: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: "900",
-    letterSpacing: 0.7,
-    marginTop: 10,
+    letterSpacing: 0.8,
+    marginTop: 4,
     textAlign: "center",
   },
 
   iconWrap: {
-    width: 52,
-    height: 44,
-    borderRadius: 18,
+    width: 42,
+    height: 38,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 2,
   },
 
   activeIconWrap: {
-    width: 52,
-    height: 44,
-    borderRadius: 18,
+    width: 44,
+    height: 40,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
 
-    borderWidth: 1,
+    borderWidth: 1.2,
     borderColor: "rgba(0,220,255,0.6)",
-    backgroundColor: "rgba(0,0,0,0.14)",
+    backgroundColor: "rgba(0,0,0,0.15)",
 
     shadowColor: "#00eaff",
     shadowOpacity: 0.9,
@@ -244,8 +310,22 @@ const styles = StyleSheet.create({
   },
 
   iconImg: {
-    width: 26,
-    height: 26,
+    width: 22,
+    height: 22,
     resizeMode: "contain",
+  },
+
+  /* ✅ Glow under selected tab */
+  selectedGlow: {
+    marginTop: 6,
+    width: 28,
+    height: 4,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,220,255,0.85)",
+
+    shadowColor: "#00eaff",
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 25,
   },
 });
