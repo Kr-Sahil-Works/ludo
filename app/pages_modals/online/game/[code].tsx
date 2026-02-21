@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,9 +13,10 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUser } from "@clerk/clerk-expo";
 
-import LudoBoardOnline from "@/app/gameLogic/LudoBoardOnline";
+import LudoBoardOnline from "@/app/gameLogic/online/LudoBoardOnline";
 import { useOnlineGameLogic } from "@/src/hooks/useOnlineGameLogic";
-import OnlineTurnBox from "@/app/gameLogic/OnlineTurnBox";
+import OnlineTurnBox from "@/app/gameLogic/online/OnlineTurnBox";
+import DiceRoller from "@/app/gameLogic/online/OnlineDiceRoller"; // ✅ NEW
 
 const RedToken = require("@/src/assets/images/piles/red_1024_transparent.png");
 const GreenToken = require("@/src/assets/images/piles/green_1024_transparent.png");
@@ -25,9 +26,12 @@ const BlueToken = require("@/src/assets/images/piles/blue_1024_transparent.png")
 const BackIcon = require("@/src/assets/images/back.png");
 const BgImage = require("@/src/assets/images/ludogmbg.png");
 
+type PlayerLite = { userId: string };
+
 export default function OnlineGameScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+
   const { code } = useLocalSearchParams<{ code?: string }>();
   const { user, isLoaded } = useUser();
 
@@ -39,6 +43,16 @@ export default function OnlineGameScreen() {
     roomCode ? { code: roomCode } : "skip"
   );
 
+  // 🔥 dice animation state
+  const [isDiceRolling, setIsDiceRolling] = useState(false);
+  const [lastDiceValue, setLastDiceValue] = useState(1);
+
+  // 🔥 ULTRA DEVICE SAFE VALUES
+  const boardSize = Math.min(width * 0.92, height * 0.58);
+  const topSafe = Math.max(90, height * 0.1);
+  const bottomSafe = Math.max(24, height * 0.035);
+
+  // ✅ responsive styles
   const styles = useMemo(() => {
     return StyleSheet.create({
       container: {
@@ -81,7 +95,13 @@ export default function OnlineGameScreen() {
         letterSpacing: 1.5,
       },
       boardWrapper: {
-        marginTop: 150,
+        marginTop: topSafe,
+      },
+      diceWrapper: {
+        position: "absolute",
+        bottom: bottomSafe + 90,
+        alignSelf: "center",
+        zIndex: 9999,
       },
       loadingText: {
         fontSize: 16,
@@ -89,7 +109,7 @@ export default function OnlineGameScreen() {
         color: "#fff",
       },
     });
-  }, []);
+  }, [topSafe, bottomSafe]);
 
   // -------- SAFE VALUES --------
 
@@ -106,6 +126,9 @@ export default function OnlineGameScreen() {
     cuttingTokenKey,
     currentPlayerIndex,
     isMyTurn,
+    lastMoveSteps,
+    lastMovePlayerIndex,
+    lastMoveTokenIndex,
   } = useOnlineGameLogic({
     roomCode,
     userId,
@@ -115,6 +138,24 @@ export default function OnlineGameScreen() {
     triggerTrophy: () => {},
   });
 
+  // 🔥 sync dice animation with server value
+  useEffect(() => {
+    if (!diceValue) return;
+
+    setLastDiceValue(diceValue);
+    setIsDiceRolling(false);
+  }, [diceValue]);
+
+  // 🔥 wrapped roll handler (PART 4 FIX)
+  const handleRoll = async () => {
+    if (!canRollDice) return;
+
+    setIsDiceRolling(true);
+    await roll(); // server call happens inside hook
+  };
+
+  // ---------------- LOADING ----------------
+
   if (!isLoaded || !safeState) {
     return (
       <View style={styles.container}>
@@ -123,12 +164,13 @@ export default function OnlineGameScreen() {
     );
   }
 
-  const boardSize = width * 0.92;
-  const activePlayerIndexes = safePlayers.map((_: any, i: number) => i);
+  const activePlayerIndexes = safePlayers.map(
+    (_: PlayerLite, i: number) => i
+  );
+
   const currentPlayer = safePlayers[currentPlayerIndex];
   const turnColor = currentPlayer?.color ?? "red";
 
-  // ✅ map token image cleanly
   const tokenMap: Record<string, any> = {
     red: RedToken,
     green: GreenToken,
@@ -137,9 +179,9 @@ export default function OnlineGameScreen() {
   };
 
   const tokenImage = tokenMap[turnColor] ?? RedToken;
-
-  // ✅ only active player box should look active
   const isActiveTurn = currentPlayer?.userId === userId;
+
+  // ---------------- UI ----------------
 
   return (
     <View style={styles.container}>
@@ -164,6 +206,9 @@ export default function OnlineGameScreen() {
           movableTokens={movableTokens}
           cuttingTokenKey={cuttingTokenKey}
           activePlayerIndexes={activePlayerIndexes}
+          lastMoveSteps={lastMoveSteps}
+          lastMovePlayerIndex={lastMovePlayerIndex}
+          lastMoveTokenIndex={lastMoveTokenIndex}
         />
       </View>
 
@@ -171,19 +216,20 @@ export default function OnlineGameScreen() {
       <View
         style={{
           position: "absolute",
-          bottom: 40,
+          bottom: bottomSafe,
           alignSelf: "center",
+          zIndex: 9999,
         }}
       >
-        <OnlineTurnBox
-          tokenImage={tokenImage}
-          color={turnColor}
-          diceValue={diceValue}
-          isActive={isActiveTurn}
-          isMyTurn={isActiveTurn}
-          disabled={!canRollDice || !isActiveTurn}
-          onRoll={roll}
-        />
+      <OnlineTurnBox
+  color={turnColor}
+  diceValue={lastDiceValue}
+  isActive={isActiveTurn}
+  isMyTurn={isActiveTurn}
+  disabled={!canRollDice || !isActiveTurn}
+  onRoll={handleRoll}
+  isRolling={isDiceRolling}
+/>
       </View>
     </View>
   );

@@ -23,9 +23,9 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 
-import DiceRoll from "@/app/gameLogic/DiceRoll";
+import DiceRoll from "@/app/gameLogic/offline/DiceRoll";
 import GameSkeleton from "@/src/components/Loaders/GameSkeleton";
-import LudoBoard from "@/app/gameLogic/LudoBoard";
+import LudoBoard from "@/app/gameLogic/offline/LudoBoard";
 
 import LottieView from "lottie-react-native";
 import FireworkAnim from "@/src/assets/animation/firework.json";

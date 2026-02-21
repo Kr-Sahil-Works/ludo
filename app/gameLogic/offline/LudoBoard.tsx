@@ -7,9 +7,10 @@ import {
   getTokenPositionXY,
   getCellXY,
   HomeTokenSlots,
-} from "../../src/helpers/BoardPositions";
+} from "@/src/helpers/BoardPositions";
 
-import TileImpactPulse from "@/app/gameLogic/TileImpactPulse";
+import TileImpactPulse from "@/app/gameLogic/offline/TileImpactPulse";
+import { startingPoints, victoryStart } from "@/src/helpers/PlotData";
 
 const BoardImg = require("@/src/assets/images/boardsquare_2040.png");
 const PADDING = 6;
@@ -188,25 +189,27 @@ export default function LudoBoard({
 
           return (
             <Token
-              key={`${realPlayerIndex}-${tIndex}`}
-              x={finalX}
-              y={finalY}
-              homeX={homeFinalX}
-              homeY={homeFinalY}
-              size={tokenSize}
-              image={getTokenImage(realPlayerIndex)}
-              highlight={shouldHighlightToken(realPlayerIndex, tIndex)}
-              glowColor={glowColor}
-              isCutting={
-                pos !== 0 && cuttingTokenKey === `${realPlayerIndex}-${tIndex}`
-              }
-              kickDirection={getKickDirection(realPlayerIndex)}
-              zIndex={1000 + tIndex}
-              onPress={() => onTokenPress(realPlayerIndex, tIndex)}
-              onStepImpact={(impactX, impactY) =>
-                triggerImpact(impactX, impactY, glowColor)
-              }
-            />
+  isHomeFinal={pos === victoryStart[realPlayerIndex] + 5}
+  isSpawnProtected={pos === startingPoints[realPlayerIndex]}
+  key={`${realPlayerIndex}-${tIndex}`}
+  x={finalX}
+  y={finalY}
+  homeX={homeFinalX}
+  homeY={homeFinalY}
+  size={tokenSize}
+  image={getTokenImage(realPlayerIndex)}
+  highlight={shouldHighlightToken(realPlayerIndex, tIndex)}
+  glowColor={glowColor}
+  isCutting={
+    pos !== 0 && cuttingTokenKey === `${realPlayerIndex}-${tIndex}`
+  }
+  kickDirection={getKickDirection(realPlayerIndex)}
+  zIndex={1000 + tIndex}
+  onPress={() => onTokenPress(realPlayerIndex, tIndex)}
+  onStepImpact={(impactX, impactY) =>
+    triggerImpact(impactX, impactY, glowColor)
+  }
+/>
           );
         });
       })}

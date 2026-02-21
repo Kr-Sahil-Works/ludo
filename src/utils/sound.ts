@@ -1,25 +1,38 @@
 import { createAudioPlayer, AudioPlayer } from "expo-audio";
 
+// =====================================================
+// 🎧 PLAYERS
+// =====================================================
+
 let bgPlayer: AudioPlayer | null = null;
 let fxPlayer: AudioPlayer | null = null;
 
 let currentBGTrack: string | null = null;
 
-// Fade interval holder (only for bg)
-let bgFadeInterval: any = null;
+// ✅ FIXED TYPE (no more any)
+let bgFadeInterval: ReturnType<typeof setInterval> | null = null;
 
-// Default volumes
+// =====================================================
+// 🔊 CONFIG
+// =====================================================
+
 const BG_MAX_VOLUME = 0.2;
 const FX_MAX_VOLUME = 1.0;
 
-// Fade settings
 const FADE_STEP = 0.04;
 const FADE_DELAY = 60;
 
-// ✅ GLOBAL SETTINGS
+// =====================================================
+// 🌍 GLOBAL SETTINGS
+// =====================================================
+
 let FX_ENABLED = true;
 let MUSIC_ENABLED = true;
 let ALL_SOUND_ENABLED = true;
+
+// =====================================================
+// 🎵 SOUND FILES
+// =====================================================
 
 const soundFiles: Record<string, any> = {
   home: require("../assets/sounds/hometrack.mp3"),
@@ -43,13 +56,21 @@ const soundFiles: Record<string, any> = {
   homepass: require("../assets/sounds/homepass.mp3"),
 };
 
-// ---------------- INTERNAL HELPERS ----------------
+// =====================================================
+// 🧹 INTERNAL HELPERS
+// =====================================================
 
 function clearBGFade() {
   if (bgFadeInterval) {
     clearInterval(bgFadeInterval);
     bgFadeInterval = null;
   }
+}
+
+function safePause(player: AudioPlayer | null) {
+  try {
+    player?.pause();
+  } catch {}
 }
 
 function fadeBGToVolume(targetVolume: number, onDone?: () => void) {
@@ -88,75 +109,61 @@ function fadeBGToVolume(targetVolume: number, onDone?: () => void) {
   }, FADE_DELAY);
 }
 
-// ---------------- SETTINGS ----------------
+// =====================================================
+// ⚙️ SETTINGS
+// =====================================================
 
 export function setFXEnabled(value: boolean) {
   FX_ENABLED = value;
-
-  if (!value) {
-    stopFX();
-  }
+  if (!value) stopFX();
 }
 
-// ⚠️ IMPORTANT: this should ONLY update flag.
-// DO NOT stop music here. (Settings load should not kill music)
 export function setMusicEnabled(value: boolean) {
   MUSIC_ENABLED = value;
 }
 
-// ⚠️ IMPORTANT: this should ONLY update flag.
 export function setAllSoundEnabled(value: boolean) {
   ALL_SOUND_ENABLED = value;
 }
 
-export function getFXEnabled() {
-  return FX_ENABLED;
-}
+export const getFXEnabled = () => FX_ENABLED;
+export const getMusicEnabled = () => MUSIC_ENABLED;
+export const getAllSoundEnabled = () => ALL_SOUND_ENABLED;
 
-export function getMusicEnabled() {
-  return MUSIC_ENABLED;
-}
-
-export function getAllSoundEnabled() {
-  return ALL_SOUND_ENABLED;
-}
-
-// ---------------- BACKGROUND MUSIC ----------------
+// =====================================================
+// 🎼 BACKGROUND MUSIC
+// =====================================================
 
 export function playBG(name: string, fadeIn: boolean = true) {
   try {
     if (!soundFiles[name]) return;
+    if (!ALL_SOUND_ENABLED || !MUSIC_ENABLED) return;
 
-    // ❌ BLOCK IF SOUND OFF
-    if (!ALL_SOUND_ENABLED) return;
-    if (!MUSIC_ENABLED) return;
-
-    // ✅ already playing same track
+    // ✅ same track guard
     if (bgPlayer && currentBGTrack === name) return;
 
-    // ✅ if another track playing, stop it first
+    // 🔁 switch track safely
     if (bgPlayer && currentBGTrack !== name) {
       stopBG(true, () => playBG(name, fadeIn));
       return;
     }
 
-    bgPlayer = createAudioPlayer(soundFiles[name]);
-    bgPlayer.loop = true;
+    const player = createAudioPlayer(soundFiles[name]);
+    player.loop = true;
+
+    bgPlayer = player;
     currentBGTrack = name;
 
-    bgPlayer.volume = fadeIn ? 0 : BG_MAX_VOLUME;
+    player.volume = fadeIn ? 0 : BG_MAX_VOLUME;
 
     setTimeout(() => {
       try {
-        bgPlayer?.play();
-
-        if (fadeIn && bgPlayer) {
-          fadeBGToVolume(BG_MAX_VOLUME);
-        }
+        player.play();
+        if (fadeIn) fadeBGToVolume(BG_MAX_VOLUME);
       } catch (err) {
         console.log("BG play error:", err);
       }
-    }, 100);
+    }, 80);
   } catch (err) {
     console.log("BG sound error:", err);
   }
@@ -172,21 +179,14 @@ export function stopBG(fadeOut: boolean = false, onDone?: () => void) {
 
     if (fadeOut) {
       fadeBGToVolume(0, () => {
-        try {
-          bgPlayer?.pause();
-        } catch {}
-
+        safePause(bgPlayer);
         bgPlayer = null;
         currentBGTrack = null;
         onDone?.();
       });
     } else {
       clearBGFade();
-
-      try {
-        bgPlayer.pause();
-      } catch {}
-
+      safePause(bgPlayer);
       bgPlayer = null;
       currentBGTrack = null;
       onDone?.();
@@ -196,43 +196,37 @@ export function stopBG(fadeOut: boolean = false, onDone?: () => void) {
   }
 }
 
-// ---------------- SOUND EFFECTS ----------------
+// =====================================================
+// 🔊 SOUND EFFECTS
+// =====================================================
 
 export function playFX(name: string) {
   try {
     if (!soundFiles[name]) return;
+    if (!ALL_SOUND_ENABLED || !FX_ENABLED) return;
 
-    if (!ALL_SOUND_ENABLED) return;
-    if (!FX_ENABLED) return;
-
+    // ✅ smoother stop (no pop)
     if (fxPlayer) {
-      fxPlayer.pause();
+      safePause(fxPlayer);
       fxPlayer = null;
     }
 
-    fxPlayer = createAudioPlayer(soundFiles[name]);
-    fxPlayer.loop = false;
-    fxPlayer.volume = FX_MAX_VOLUME;
+    const player = createAudioPlayer(soundFiles[name]);
+    player.loop = false;
+    player.volume = FX_MAX_VOLUME;
 
-    fxPlayer.play();
+    fxPlayer = player;
+    player.play();
   } catch (err) {
     console.log("FX sound error:", err);
   }
 }
 
-export function playSound(name: string) {
-  playFX(name);
-}
+export const playSound = playFX;
 
 export function stopFX() {
-  try {
-    if (fxPlayer) {
-      fxPlayer.pause();
-      fxPlayer = null;
-    }
-  } catch (err) {
-    console.log("Stop FX error:", err);
-  }
+  safePause(fxPlayer);
+  fxPlayer = null;
 }
 
 export function stopAllSound(fadeOut: boolean = false) {
@@ -240,9 +234,10 @@ export function stopAllSound(fadeOut: boolean = false) {
   stopBG(fadeOut);
 }
 
-// ---------------- APPLY SETTINGS SAFELY ----------------
+// =====================================================
+// 🧠 APPLY SETTINGS SAFELY
+// =====================================================
 
-// ✅ call this after loading settings from AsyncStorage
 export function applySoundSettings() {
   if (!ALL_SOUND_ENABLED || !MUSIC_ENABLED) {
     stopBG(true);

@@ -48,8 +48,23 @@ export const isSafeSpot = (pos: number) => {
   return SafeSpots.includes(pos);
 };
 
-export function findCutTokens(players: any[], currentPlayer: number, pos: number) {
+///////////////////////////////////////////////////////////////
+// 🚨🔥 CRITICAL FIX — SAFE TILE + SPAWN PROTECTION
+///////////////////////////////////////////////////////////////
+
+export function findCutTokens(
+  players: any[],
+  currentPlayer: number,
+  pos: number
+) {
+  // ❌ never cut at home or invalid
   if (pos === 0 || pos >= 100) return [];
+
+  // ✅ NEW: spawn tiles are ALWAYS SAFE
+  if (startingPoints.includes(pos)) return [];
+
+  // ✅ existing safe stars
+  if (SafeSpots.includes(pos)) return [];
 
   const cuts: { playerIndex: number; tokenIndex: number }[] = [];
 
@@ -58,7 +73,7 @@ export function findCutTokens(players: any[], currentPlayer: number, pos: number
 
     const tokensAtPos = players[p].tokens
       .map((t: number, idx: number) => ({ t, idx }))
-      .filter((obj: any) => obj.t === pos);
+      .filter((obj: { t: number; idx: number }) => obj.t === pos);
 
     // ✅ BLOCK RULE (2+ tokens = no cut)
     if (tokensAtPos.length >= 2) {
@@ -66,13 +81,15 @@ export function findCutTokens(players: any[], currentPlayer: number, pos: number
     }
 
     if (tokensAtPos.length === 1) {
-      cuts.push({ playerIndex: p, tokenIndex: tokensAtPos[0].idx });
+      cuts.push({
+        playerIndex: p,
+        tokenIndex: tokensAtPos[0].idx,
+      });
     }
   }
 
   return cuts;
 }
-
 
 // ✅ FIXED: step-by-step movement
 export const moveTokenSteps = (
@@ -104,7 +121,7 @@ export const moveTokenSteps = (
     for (let i = 1; i <= diceValue; i++) {
       const nextIndex = homeIndex + i;
 
-      if (nextIndex >= homePath.length) return []; // cannot move
+      if (nextIndex >= homePath.length) return [];
       steps.push(homePath[nextIndex].id);
     }
 
@@ -114,18 +131,18 @@ export const moveTokenSteps = (
   // inside main path
   if (isMainPathPos(currentPos)) {
     const currentIndex = getMainIndex(currentPos);
-    const homeEntryIndex = homeEntryIndexMap[playerIndex as 0 | 1 | 2 | 3];
+    const homeEntryIndex = homeEntryIndexMap[
+      playerIndex as 0 | 1 | 2 | 3
+    ];
 
-    // ✅ distance from currentIndex to homeEntryIndex (forward wrap safe)
     let distanceToEntry = homeEntryIndex - currentIndex;
     if (distanceToEntry < 0) distanceToEntry += MAIN_PATH_LENGTH;
 
     for (let i = 1; i <= diceValue; i++) {
-      // ✅ if crossed entry -> go into home lane
       if (i > distanceToEntry) {
         const stepsIntoHome = i - distanceToEntry - 1;
 
-        if (stepsIntoHome >= homePath.length) return []; // cannot move
+        if (stepsIntoHome >= homePath.length) return [];
         steps.push(homePath[stepsIntoHome].id);
       } else {
         const nextIndex = (currentIndex + i) % MAIN_PATH_LENGTH;
@@ -145,9 +162,7 @@ export const moveTokenWithPath = (
   diceValue: number
 ): number => {
   const steps = moveTokenSteps(playerIndex, currentPos, diceValue);
-
   if (steps.length === 0) return currentPos;
-
   return steps[steps.length - 1];
 };
 
@@ -162,7 +177,6 @@ export const moveTokenReverseSteps = (
 
   const homePath = getHomePath(playerIndex);
 
-  // if token is in home lane
   if (isHomePathPos(playerIndex, currentPos)) {
     const homeIndex = getHomeIndex(playerIndex, currentPos);
 
@@ -174,7 +188,6 @@ export const moveTokenReverseSteps = (
     return steps;
   }
 
-  // if token is in main path
   if (isMainPathPos(currentPos)) {
     let currentIndex = getMainIndex(currentPos);
 
@@ -184,7 +197,8 @@ export const moveTokenReverseSteps = (
 
       steps.push(MainPath[currentIndex].id);
 
-      if (MainPath[currentIndex].id === startingPoints[playerIndex]) break;
+      if (MainPath[currentIndex].id === startingPoints[playerIndex])
+        break;
     }
 
     steps.push(0);

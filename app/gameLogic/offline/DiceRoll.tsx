@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Pressable, StyleSheet, Image, View } from "react-native";
 import LottieView from "lottie-react-native";
-import { BackgroundImage } from "../../src/helpers/GetIcons";
+import { BackgroundImage } from "@/src/helpers/GetIcons";
 
 const diceAnim = require("@/src/assets/animation/diceroll.json");
 
